@@ -317,7 +317,90 @@ export const FairnessReportSection = ({ report, settings, onRecalculate }: Fairn
         </Card>
       </Collapsible>
 
-      {/* Section F: Division Balance Summary */}
+      {/* Section F: Opponent Distribution */}
+      <Collapsible open={openSections.has('opponents')} onOpenChange={() => toggleSection('opponents')}>
+        <Card>
+          <CollapsibleTrigger className="w-full">
+            <CardHeader className="pb-3 cursor-pointer hover:bg-muted/30 transition-colors">
+              <CardTitle className="text-sm flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-accent" />
+                  Opponent Distribution
+                </span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${openSections.has('opponents') ? 'rotate-180' : ''}`} />
+              </CardTitle>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Division A */}
+                {divisionAStats.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2 badge-division-a inline-block">Division A</h4>
+                    <div className="overflow-x-auto">
+                      <table className="data-table text-sm">
+                        <thead>
+                          <tr>
+                            <th>Team</th>
+                            {divisionAStats.map(stat => (
+                              <th key={stat.teamName} className="text-center text-xs">vs {stat.teamName}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {divisionAStats.map(stat => (
+                            <tr key={stat.teamName}>
+                              <td className="font-medium">{stat.teamName}</td>
+                              {divisionAStats.map(opponent => (
+                                <td key={opponent.teamName} className="text-center font-mono tabular-nums">
+                                  {stat.teamName === opponent.teamName ? '—' : (stat.opponentGames[opponent.teamName] || 0)}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                {/* Division B */}
+                {divisionBStats.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2 badge-division-b inline-block">Division B</h4>
+                    <div className="overflow-x-auto">
+                      <table className="data-table text-sm">
+                        <thead>
+                          <tr>
+                            <th>Team</th>
+                            {divisionBStats.map(stat => (
+                              <th key={stat.teamName} className="text-center text-xs">vs {stat.teamName}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {divisionBStats.map(stat => (
+                            <tr key={stat.teamName}>
+                              <td className="font-medium">{stat.teamName}</td>
+                              {divisionBStats.map(opponent => (
+                                <td key={opponent.teamName} className="text-center font-mono tabular-nums">
+                                  {stat.teamName === opponent.teamName ? '—' : (stat.opponentGames[opponent.teamName] || 0)}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* Section G: Division Balance Summary */}
       <Collapsible open={openSections.has('balance')} onOpenChange={() => toggleSection('balance')}>
         <Card>
           <CollapsibleTrigger className="w-full">
