@@ -2,95 +2,148 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Beer League Hockey Scheduler Design System
+   Theme: Professional sports utility with ice hockey influence
+   Colors: Deep navy, teal accents, clean whites
 */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Core backgrounds */
+    --background: 210 20% 98%;
+    --foreground: 220 30% 15%;
 
+    /* Cards and elevated surfaces */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 220 30% 15%;
 
+    /* Popovers and dropdowns */
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 220 30% 15%;
 
-    --primary: 222.2 47.4% 11.2%;
+    /* Primary: Deep Navy Blue */
+    --primary: 220 60% 20%;
     --primary-foreground: 210 40% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Secondary: Light Ice Blue */
+    --secondary: 200 30% 94%;
+    --secondary-foreground: 220 30% 20%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Muted surfaces */
+    --muted: 210 20% 96%;
+    --muted-foreground: 220 15% 45%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Accent: Teal/Cyan */
+    --accent: 185 70% 40%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Destructive: Warning Red */
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Warning: Orange */
+    --warning: 35 90% 50%;
+    --warning-foreground: 0 0% 100%;
 
-    --radius: 0.5rem;
+    /* Success: Green */
+    --success: 150 60% 40%;
+    --success-foreground: 0 0% 100%;
 
-    --sidebar-background: 0 0% 98%;
+    /* Ice: Light teal for highlights */
+    --ice: 185 50% 92%;
+    --ice-foreground: 185 70% 25%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    /* Borders and inputs */
+    --border: 210 25% 88%;
+    --input: 210 25% 88%;
+    --ring: 185 70% 40%;
 
-    --sidebar-primary: 240 5.9% 10%;
+    --radius: 0.625rem;
 
-    --sidebar-primary-foreground: 0 0% 98%;
+    /* Sidebar */
+    --sidebar-background: 220 50% 12%;
+    --sidebar-foreground: 210 30% 90%;
+    --sidebar-primary: 185 70% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 45% 18%;
+    --sidebar-accent-foreground: 210 30% 90%;
+    --sidebar-border: 220 40% 20%;
+    --sidebar-ring: 185 70% 45%;
 
-    --sidebar-accent: 240 4.8% 95.9%;
+    /* Tab indicators */
+    --tab-active: 185 70% 40%;
+    --tab-inactive: 210 20% 70%;
 
-    --sidebar-accent-foreground: 240 5.9% 10%;
+    /* Table stripes */
+    --table-stripe: 210 20% 97%;
 
-    --sidebar-border: 220 13% 91%;
+    /* Late game indicator */
+    --late-indicator: 35 90% 50%;
 
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Weekend indicator */
+    --weekend-indicator: 280 60% 55%;
+
+    /* Gradients */
+    --gradient-ice: linear-gradient(135deg, hsl(185 50% 95%) 0%, hsl(200 40% 98%) 100%);
+    --gradient-header: linear-gradient(180deg, hsl(220 60% 18%) 0%, hsl(220 55% 22%) 100%);
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 220 40% 8%;
+    --foreground: 210 30% 95%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 220 35% 12%;
+    --card-foreground: 210 30% 95%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 220 35% 12%;
+    --popover-foreground: 210 30% 95%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 185 70% 50%;
+    --primary-foreground: 220 40% 10%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 220 30% 18%;
+    --secondary-foreground: 210 30% 90%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 220 25% 15%;
+    --muted-foreground: 210 20% 60%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 185 70% 45%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 65% 45%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --warning: 35 85% 45%;
+    --warning-foreground: 0 0% 100%;
+
+    --success: 150 55% 35%;
+    --success-foreground: 0 0% 100%;
+
+    --ice: 185 40% 15%;
+    --ice-foreground: 185 60% 70%;
+
+    --border: 220 30% 20%;
+    --input: 220 30% 20%;
+    --ring: 185 70% 45%;
+
+    --sidebar-background: 220 45% 6%;
+    --sidebar-foreground: 210 30% 90%;
+    --sidebar-primary: 185 70% 50%;
+    --sidebar-primary-foreground: 220 40% 8%;
+    --sidebar-accent: 220 35% 12%;
+    --sidebar-accent-foreground: 210 30% 90%;
+    --sidebar-border: 220 30% 15%;
+    --sidebar-ring: 185 70% 50%;
+
+    --tab-active: 185 70% 50%;
+    --tab-inactive: 220 20% 40%;
+
+    --table-stripe: 220 30% 10%;
+
+    --gradient-ice: linear-gradient(135deg, hsl(185 40% 12%) 0%, hsl(200 35% 10%) 100%);
+    --gradient-header: linear-gradient(180deg, hsl(220 45% 8%) 0%, hsl(220 40% 12%) 100%);
   }
 }
 
@@ -99,7 +152,178 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+@layer components {
+  /* Tab navigation styling */
+  .tab-nav {
+    @apply flex gap-1 p-1 bg-muted rounded-lg;
+  }
+
+  .tab-item {
+    @apply px-4 py-2 rounded-md text-sm font-medium transition-all duration-200;
+    @apply text-muted-foreground hover:text-foreground hover:bg-background/50;
+  }
+
+  .tab-item-active {
+    @apply bg-background text-foreground shadow-sm;
+  }
+
+  /* File upload zone */
+  .upload-zone {
+    @apply border-2 border-dashed border-border rounded-xl p-8;
+    @apply transition-all duration-200 ease-out;
+    @apply hover:border-accent hover:bg-ice/30;
+  }
+
+  .upload-zone-active {
+    @apply border-accent bg-ice/50 scale-[1.01];
+  }
+
+  /* Data table styling */
+  .data-table {
+    @apply w-full text-sm;
+  }
+
+  .data-table th {
+    @apply px-4 py-3 text-left font-semibold text-muted-foreground uppercase text-xs tracking-wide;
+    @apply bg-muted/50 border-b border-border;
+  }
+
+  .data-table td {
+    @apply px-4 py-3 border-b border-border/50;
+  }
+
+  .data-table tr:nth-child(even) {
+    @apply bg-table-stripe;
+  }
+
+  .data-table tr:hover {
+    @apply bg-ice/40;
+  }
+
+  /* Indicator badges */
+  .badge-late {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+    @apply bg-warning/15 text-warning;
+  }
+
+  .badge-weekend {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+    @apply bg-purple-100 text-purple-700;
+  }
+
+  .badge-ok {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+    @apply bg-success/15 text-success;
+  }
+
+  .badge-flagged {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+    @apply bg-destructive/15 text-destructive;
+  }
+
+  /* Division badges */
+  .badge-division-a {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+    @apply bg-primary/10 text-primary;
+  }
+
+  .badge-division-b {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+    @apply bg-accent/15 text-accent;
+  }
+
+  /* Step indicators */
+  .step-indicator {
+    @apply flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold;
+    @apply transition-all duration-200;
+  }
+
+  .step-indicator-active {
+    @apply bg-accent text-accent-foreground shadow-md;
+  }
+
+  .step-indicator-complete {
+    @apply bg-success text-success-foreground;
+  }
+
+  .step-indicator-pending {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  /* Card hover effect */
+  .card-interactive {
+    @apply transition-all duration-200 ease-out;
+    @apply hover:shadow-lg hover:-translate-y-0.5;
+  }
+
+  /* Mono numbers for tables */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  .bg-gradient-ice {
+    background: var(--gradient-ice);
+  }
+
+  .bg-gradient-header {
+    background: var(--gradient-header);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 }
