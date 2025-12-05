@@ -76,7 +76,14 @@ export const parseCSV = (content: string, lateThreshold: string): { slots: IceSl
   const errors: string[] = [];
 
   if (lines.length < 2) {
-    return { slots: [], errors: ['File must contain a header row and at least one data row'] };
+    return {
+      slots: [],
+      errors: [
+        'File must contain a header row and at least one data row.',
+        'Expected format: First row should have "Date" and "Start Time" columns.',
+        'Example: Date,Start Time\\n2025-01-15,17:00\\n2025-01-15,21:00'
+      ]
+    };
   }
 
   // Skip header row
@@ -85,9 +92,11 @@ export const parseCSV = (content: string, lateThreshold: string): { slots: IceSl
     if (!line) continue;
 
     const parts = line.split(/[,\t]/).map(p => p.trim().replace(/^["']|["']$/g, ''));
-    
+
     if (parts.length < 2) {
-      errors.push(`Row ${i + 1}: Missing required columns`);
+      errors.push(
+        `Row ${i + 1}: Missing required columns. Expected at least 2 columns (Date, Start Time), found ${parts.length}.`
+      );
       continue;
     }
 
@@ -96,17 +105,21 @@ export const parseCSV = (content: string, lateThreshold: string): { slots: IceSl
     const time = parseTime(timeStr);
 
     if (!date) {
-      errors.push(`Row ${i + 1}: Could not parse date "${dateStr}"`);
+      errors.push(
+        `Row ${i + 1}: Could not parse date "${dateStr}". Supported formats: YYYY-MM-DD, MM/DD/YYYY, or MM-DD-YYYY.`
+      );
       continue;
     }
 
     if (!time) {
-      errors.push(`Row ${i + 1}: Could not parse time "${timeStr}"`);
+      errors.push(
+        `Row ${i + 1}: Could not parse time "${timeStr}". Supported formats: HH:MM (24-hour) or HH:MM AM/PM.`
+      );
       continue;
     }
 
     const dayOfWeek = getDayOfWeek(date);
-    
+
     slots.push({
       id: `slot-${i}-${Date.now()}`,
       date,
@@ -122,6 +135,13 @@ export const parseCSV = (content: string, lateThreshold: string): { slots: IceSl
     if (a.date !== b.date) return a.date.localeCompare(b.date);
     return a.startTime.localeCompare(b.startTime);
   });
+
+  // Add helpful summary message if there were errors
+  if (errors.length > 0 && slots.length > 0) {
+    errors.unshift(
+      `Successfully parsed ${slots.length} ice slots, but encountered ${errors.length} error(s):`
+    );
+  }
 
   return { slots, errors };
 };

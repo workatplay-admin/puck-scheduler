@@ -1,0 +1,131 @@
+{
+  "timestamp": "2025-12-05T03:53:57.125Z",
+  "algorithmType": "greedy",
+  "testConfiguration": {
+    "iceSlots": 300,
+    "teams": 16,
+    "runs": 10,
+    "settings": {
+      "lateGameThreshold": "20:45",
+      "lateSlotVarianceFlag": 2,
+      "weekendVarianceFlag": 3,
+      "maxGamesPerWeek": 3
+    }
+  },
+  "summary": {
+    "runs": [
+      {
+        "runNumber": 1,
+        "scheduleSize": 300,
+        "fairnessScore": 1100,
+        "lateSlotMaxVariance": 1,
+        "weekendMaxVariance": 1,
+        "generationTime": 16.462851999999998,
+        "flaggedTeams": 0
+      },
+      {
+        "runNumber": 2,
+        "scheduleSize": 300,
+        "fairnessScore": 1400,
+        "lateSlotMaxVariance": 1,
+        "weekendMaxVariance": 2,
+        "generationTime": 2.4975749999999834,
+        "flaggedTeams": 0
+      },
+      {
+        "runNumber": 3,
+        "scheduleSize": 300,
+        "fairnessScore": 1100,
+        "lateSlotMaxVariance": 1,
+        "weekendMaxVariance": 1,
+        "generationTime": 3.2653130000000488,
+        "flaggedTeams": 0
+      },
+      {
+        "runNumber": 4,
+        "scheduleSize": 300,
+        "fairnessScore": 1100,
+        "lateSlotMaxVariance": 1,
+        "weekendMaxVariance": 1,
+        "generationTime": 3.1930340000000115,
+        "flaggedTeams": 0
+      },
+      {
+        "runNumber": 5,
+        "scheduleSize": 300,
+        "fairnessScore": 1100,
+        "lateSlotMaxVariance": 1,
+        "weekendMaxVariance": 1,
+        "generationTime": 2.5922239999999874,
+        "flaggedTeams": 0
+      },
+      {
+        "runNumber": 6,
+        "scheduleSize": 300,
+        "fairnessScore": 1400,
+        "lateSlotMaxVariance": 1,
+        "weekendMaxVariance": 2,
+        "generationTime": 6.589346999999975,
+        "flaggedTeams": 0
+      },
+      {
+        "runNumber": 7,
+        "scheduleSize": 300,
+        "fairnessScore": 1100,
+        "lateSlotMaxVariance": 1,
+        "weekendMaxVariance": 1,
+        "generationTime": 6.47649100000001,
+        "flaggedTeams": 0
+      },
+      {
+        "runNumber": 8,
+        "scheduleSize": 300,
+        "fairnessScore": 1100,
+        "lateSlotMaxVariance": 1,
+        "weekendMaxVariance": 1,
+        "generationTime": 6.341330000000028,
+        "flaggedTeams": 0
+      },
+      {
+        "runNumber": 9,
+        "scheduleSize": 300,
+        "fairnessScore": 1100,
+        "lateSlotMaxVariance": 1,
+        "weekendMaxVariance": 1,
+        "generationTime": 6.526373999999976,
+        "flaggedTeams": 0
+      },
+      {
+        "runNumber": 10,
+        "scheduleSize": 300,
+        "fairnessScore": 1100,
+        "lateSlotMaxVariance": 1,
+        "weekendMaxVariance": 1,
+        "generationTime": 4.767764,
+        "flaggedTeams": 0
+      }
+    ],
+    "avgFairnessScore": 1160,
+    "avgLateSlotVariance": 1,
+    "avgWeekendVariance": 1.2,
+    "avgGenerationTime": 5.871230400000002,
+    "bestRun": {
+      "runNumber": 1,
+      "scheduleSize": 300,
+      "fairnessScore": 1100,
+      "lateSlotMaxVariance": 1,
+      "weekendMaxVariance": 1,
+      "generationTime": 16.462851999999998,
+      "flaggedTeams": 0
+    },
+    "worstRun": {
+      "runNumber": 2,
+      "scheduleSize": 300,
+      "fairnessScore": 1400,
+      "lateSlotMaxVariance": 1,
+      "weekendMaxVariance": 2,
+      "generationTime": 2.4975749999999834,
+      "flaggedTeams": 0
+    }
+  }
+}

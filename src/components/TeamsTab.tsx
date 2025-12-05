@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Team } from '@/types/scheduler';
+import { toast } from 'sonner';
 
 interface TeamsTabProps {
   teams: Team[];
@@ -25,16 +26,30 @@ export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }:
   const canGenerate = divisionATeams.length >= 2 || divisionBTeams.length >= 2;
 
   const handleAddTeam = () => {
-    if (!teamName.trim()) return;
-    
+    if (!teamName.trim()) {
+      toast.error('Team name cannot be empty');
+      return;
+    }
+
+    // Check for duplicate team names (case-insensitive)
+    const isDuplicate = teams.some(
+      team => team.name.toLowerCase() === teamName.trim().toLowerCase()
+    );
+
+    if (isDuplicate) {
+      toast.error(`Team "${teamName.trim()}" already exists`);
+      return;
+    }
+
     const newTeam: Team = {
       id: `team-${Date.now()}`,
       name: teamName.trim(),
       division,
     };
-    
+
     onAddTeam(newTeam);
     setTeamName('');
+    toast.success(`Team "${newTeam.name}" added to Division ${division}`);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {

@@ -37,8 +37,31 @@ const Index = () => {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleGenerateSchedule = useCallback(() => {
+    // Validation: Check for minimum teams
+    const divisionATeams = store.teams.filter(t => t.division === 'A');
+    const divisionBTeams = store.teams.filter(t => t.division === 'B');
+
+    if (divisionATeams.length < 2 && divisionBTeams.length < 2) {
+      toast.error('Need at least 2 teams in one division to generate a schedule');
+      return;
+    }
+
+    // Validation: Check for minimum ice slots
+    const minGamesNeeded = Math.max(
+      divisionATeams.length >= 2 ? divisionATeams.length * (divisionATeams.length - 1) : 0,
+      divisionBTeams.length >= 2 ? divisionBTeams.length * (divisionBTeams.length - 1) : 0
+    );
+
+    if (store.iceSlots.length < minGamesNeeded) {
+      toast.error(
+        `Not enough ice slots. Need at least ${minGamesNeeded} slots for a basic round-robin schedule, but only have ${store.iceSlots.length} slots.`,
+        { duration: 5000 }
+      );
+      return;
+    }
+
     setIsGenerating(true);
-    
+
     // Use setTimeout to allow UI to update
     setTimeout(() => {
       try {
@@ -47,12 +70,12 @@ const Index = () => {
           store.teams,
           store.settings
         );
-        
+
         store.setSchedule(schedule, unusedSlots);
-        
+
         const report = calculateFairnessReport(schedule, store.teams, store.settings);
         setFairnessReport(report);
-        
+
         store.setCurrentTab(2);
         toast.success(`Schedule generated with ${schedule.length} games!`);
       } catch (error) {
