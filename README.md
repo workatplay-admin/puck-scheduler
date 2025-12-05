@@ -1,73 +1,155 @@
-# Welcome to your Lovable project
+# Beer League Hockey Scheduler
 
-## Project info
+A web application for generating fair hockey schedules for beer league seasons. Automatically balances late-night games, weekend slots, and opponent matchups across all teams.
 
-**URL**: https://lovable.dev/projects/614b901b-938f-4189-b3c2-735e00df4bd1
+## Features
 
-## How can I edit this code?
+- **Fair Scheduling**: Optimized algorithm to distribute late games and weekend slots evenly
+- **CSV Import**: Upload ice time availability from spreadsheets
+- **Division Support**: Handle two divisions playing on separate days
+- **Fairness Reporting**: Detailed analytics showing schedule balance across teams
+- **Manual Editing**: Swap games or remove slots as needed
+- **CSV Export**: Download final schedule with fairness report
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Frontend**: React 18 + TypeScript
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS + shadcn-ui components
+- **State Management**: React hooks with localStorage persistence
+- **Client-Side Only**: No backend required, runs entirely in browser
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/614b901b-938f-4189-b3c2-735e00df4bd1) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js 16+ and npm (recommended: [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating))
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+### Installation
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# Clone the repository
+git clone https://github.com/workatplay-admin/puck-scheduler.git
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Navigate to the project directory
+cd puck-scheduler
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Install dependencies
+npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start the development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The app will be available at `http://localhost:5173`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Building for Production
 
-**Use GitHub Codespaces**
+```sh
+npm run build
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+The built files will be in the `dist/` directory.
 
-## What technologies are used for this project?
+## Usage
 
-This project is built with:
+1. **Upload Ice Times**: Import a CSV file with columns: Date, Start Time
+2. **Add Teams**: Enter team names and assign them to Division A or Division B
+3. **Generate Schedule**: Click to create an optimized fair schedule
+4. **Review Fairness**: Check the fairness report for distribution metrics
+5. **Export**: Download the final schedule as CSV
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Project Structure
 
-## How can I deploy this project?
+```
+src/
+├── components/       # React UI components
+│   ├── IceTimesTab.tsx
+│   ├── TeamsTab.tsx
+│   ├── ScheduleTab.tsx
+│   ├── ExportTab.tsx
+│   ├── FairnessReport.tsx
+│   └── SettingsPanel.tsx
+├── lib/             # Core scheduling logic
+│   ├── scheduleGenerator.ts
+│   ├── csvParser.ts
+│   ├── csvExport.ts
+│   └── algorithmTestHarness.ts
+├── types/           # TypeScript definitions
+│   └── scheduler.ts
+└── pages/
+    └── Index.tsx    # Main application
+```
 
-Simply open [Lovable](https://lovable.dev/projects/614b901b-938f-4189-b3c2-735e00df4bd1) and click on Share -> Publish.
+## Documentation
 
-## Can I connect a custom domain to my Lovable project?
+- **[PRD](docs/prd)**: Product Requirements Document
+- **[ADR](docs/Beer_League_Hockey_Scheduler_Architecture.docx.md)**: Architectural Decision Record
+- **[Implementation Plan](docs/implementation-plan.md)**: Phased development roadmap
+- **[Phase 0 Baseline](docs/phase-0-baseline.md)**: Current algorithm performance metrics
 
-Yes, you can!
+## Testing
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Run the algorithm performance test:
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```sh
+npm run test:algorithm
+```
+
+This generates baseline metrics for the scheduling algorithm.
+
+## Development Workflow
+
+### Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build locally
+- `npm run lint` - Run ESLint
+- `npm run test:algorithm` - Run scheduling algorithm performance tests
+
+### Making Changes
+
+1. Create a feature branch
+2. Make your changes
+3. Test locally with `npm run dev`
+4. Build to verify: `npm run build`
+5. Commit and push
+6. Create a pull request
+
+## Algorithm
+
+The scheduler uses a greedy slot assignment algorithm with fairness penalties:
+
+- **Phase 1**: Assign dates to divisions (alternating with balance)
+- **Phase 2**: Generate matchups (round-robin with repeats)
+- **Phase 3**: Assign matchups to slots (greedy with fairness scoring)
+- **Phase 4**: Assign home/away designation
+
+Future phases will implement simulated annealing optimization for improved fairness.
+
+## Configuration
+
+Settings can be adjusted in the UI:
+
+- **Late Game Threshold**: Time at which games are considered "late" (default: 8:45 PM)
+- **Late Slot Variance Flag**: Flag teams exceeding this variance (default: 2)
+- **Weekend Variance Flag**: Flag teams exceeding this variance (default: 3)
+- **Max Games Per Week**: Hard cap on games per team in any 7-day window (default: 3)
+
+## Browser Compatibility
+
+- Chrome, Firefox, Safari, Edge (latest 2 versions)
+- Mobile browsers supported but not optimized
+
+## License
+
+Proprietary - All rights reserved
+
+## Contributing
+
+This is a private project. For questions or suggestions, please contact the repository administrators.
+
+## Support
+
+For issues or questions, please open an issue in the GitHub repository.

@@ -309,7 +309,7 @@ Test Scenarios:
 2. **Deployment**:
    - Deploy to staging first
    - Smoke test on staging
-   - Deploy to production (Lovable auto-deploy on push)
+   - Deploy to production (auto-deploy on push)
    - Monitor for errors (console logs, user feedback)
 
 3. **Post-Deployment**:

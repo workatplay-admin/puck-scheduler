@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background circle -->
+  <circle cx="16" cy="16" r="15" fill="#1a1a1a" stroke="#3b82f6" stroke-width="2"/>
+
+  <!-- Hockey puck edge -->
+  <ellipse cx="16" cy="16" rx="12" ry="4" fill="#2d2d2d"/>
+
+  <!-- Puck top surface -->
+  <ellipse cx="16" cy="14" rx="12" ry="4" fill="#4a4a4a"/>
+
+  <!-- Highlight on puck -->
+  <ellipse cx="16" cy="13.5" rx="8" ry="2" fill="#5a5a5a" opacity="0.6"/>
+
+  <!-- Blue accent line -->
+  <ellipse cx="16" cy="16" rx="11" ry="3.5" fill="none" stroke="#3b82f6" stroke-width="0.5" opacity="0.5"/>
+</svg>
