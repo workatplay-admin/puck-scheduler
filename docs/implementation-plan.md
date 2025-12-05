@@ -30,26 +30,25 @@
 ---
 
 ## Phase 0: Foundation & Stability 🔧
-**Goal**: Get current codebase production-ready and deployable
+**Goal**: Prepare codebase for simulated annealing algorithm implementation
 **Duration**: 1-2 hours
-**User Value**: Functional app they can start using immediately
+**User Value**: Stable foundation ready for production-grade scheduling
 
 ### Tasks
 1. ✅ Install dependencies (`npm install`)
 2. ✅ Run build and fix any TypeScript/build errors
-3. ✅ Test full workflow end-to-end locally
-4. ✅ Add input validation improvements:
+3. ✅ Add input validation improvements:
    - Duplicate team name detection
    - Minimum ice slots validation (need enough slots for teams)
    - Better error messages for CSV parsing failures
-5. ✅ Deploy to production
-6. ✅ Create quick-start user guide
+4. ✅ Create algorithm test harness for comparing results
+5. ✅ Document current algorithm performance as baseline
 
 ### Success Criteria
 - [ ] App builds without errors
-- [ ] User can upload CSV, add teams, generate schedule, and export
-- [ ] No console errors during normal operation
-- [ ] Basic schedules are fair enough for initial testing
+- [ ] Test suite runs successfully
+- [ ] Input validation prevents common errors
+- [ ] Baseline metrics documented (for Phase 1 comparison)
 
 ### Deployment Testing Checklist
 ```
@@ -65,56 +64,79 @@
 
 ---
 
-## Phase 1: Core Algorithm Enhancement 🎯
-**Goal**: Implement simulated annealing optimization per ADR specs
+## Phase 1: Simulated Annealing Algorithm Implementation 🎯
+**Goal**: Complete replacement of greedy algorithm with simulated annealing per ADR specs
 **Duration**: 4-6 hours
-**User Value**: Significantly fairer schedules with better late slot and weekend distribution
+**User Value**: Production-grade fair scheduling that meets all PRD requirements
+**Status**: CRITICAL - This is the core value proposition
 
 ### Tasks
-1. **Create new optimizer module** (`src/lib/optimizer.ts`):
-   - Implement simulated annealing framework
-   - Temperature scheduling (initial: 1000, cooling: 0.9997)
-   - Neighbor generation (game swap operations)
-   - Acceptance probability calculation
+1. **Complete rewrite of slot assignment** (`src/lib/scheduleGenerator.ts`):
+   - Remove greedy slot assignment logic entirely (lines 112-223)
+   - Implement simulated annealing framework per ADR Section 5.3
+   - Temperature scheduling (initial: 1000, cooling: 0.9997, min: 0.1)
+   - Neighbor generation via game swap operations
+   - Acceptance probability: `Math.exp(-delta / temperature)`
 
-2. **Enhanced fairness scoring function**:
-   - Late slot variance per time (weight: 1000, squared penalty)
+2. **Implement comprehensive fairness scoring function** (ADR Section 5.3.1):
+   - Late slot variance per specific time (weight: 1000, squared penalty)
    - Weekend variance (weight: 100, squared penalty)
-   - Basic penalty tracking
+   - Consecutive opponent penalty (weight: 50)
+   - Rest day violations <2 days (weight: 25)
+   - Max games/week violations (weight: 10,000 - hard constraint)
 
-3. **Integrate optimizer** into existing generator:
-   - Keep phases 1, 2, and 4 (day assignment, matchups, home/away)
-   - Replace phase 3 (slot assignment) with simulated annealing
-   - Maintain backward compatibility with existing data structures
+3. **Algorithm features**:
+   - Random seed support for reproducibility
+   - Track best solution found across all iterations
+   - Target: 50,000 iterations or convergence
+   - Performance optimization for 300+ game schedules
 
-4. **Add algorithm performance metrics**:
-   - Track iterations and best score found
-   - Display optimization progress in console (for debugging)
-   - Record seed for reproducibility
+4. **Integration**:
+   - Keep phases 1, 2, and 4 from current implementation (day assignment, matchups, home/away)
+   - Phase 3 becomes pure simulated annealing
+   - All existing data structures remain compatible (Game, IceSlot, Team types)
 
-5. **Testing**:
-   - Generate 10 schedules with same inputs, compare fairness
-   - Verify improvement over greedy algorithm
-   - Performance test with 300+ games
+5. **Testing & Validation**:
+   - Generate 10 schedules with identical inputs
+   - Measure fairness score consistency
+   - Performance benchmark: must complete <30 seconds for 300 games
+   - Compare metrics to baseline from Phase 0
 
 ### Success Criteria
-- [ ] Late slot variance reduced by >50% compared to Phase 0
-- [ ] Weekend variance reduced by >40% compared to Phase 0
-- [ ] Generation completes in <30 seconds for 300 games
-- [ ] Schedules are reproducible with seed
-- [ ] Fairness report shows improved distribution
+- [ ] **Fairness**: Late slot variance ≤2, weekend variance ≤3 for all teams
+- [ ] **Performance**: <30 seconds for 300 games
+- [ ] **Reproducibility**: Same seed produces identical schedule
+- [ ] **Constraint compliance**: Zero max games/week violations
+- [ ] **Algorithm completion**: Successfully converges without errors
 
 ### User Testing Guide
 ```
-Test Scenario: 300-game season
-- Upload CSV: 150 dates, 2 slots/day (300 total)
-- Teams: 8 per division (16 total)
-- Generate 3 schedules, compare fairness reports
-- Look for: Max late slot variance ≤2, weekend variance ≤3
+Test Scenario: Full season schedule
+- Upload CSV: 150 dates, 2 slots/day (300 total ice slots)
+- Teams: 8 per division (16 total teams)
+- Expected: ~38 games per team per division
+
+Test Process:
+1. Generate schedule 3 times (different seeds)
+2. Check fairness report for each:
+   - Late slot variance ≤2 for all teams
+   - Weekend variance ≤3 for all teams
+   - No max games/week violations
+3. Verify generation time <30 seconds
+4. Export and review schedule in Excel
+5. Check for obvious unfairness (eyeball test)
+
+Success: User confirms schedule feels fair and meets their needs
 ```
 
-### Rollback Plan
-If algorithm performs poorly, keep existing greedy algorithm and treat SA as "experimental mode" toggle.
+### Alternative Approaches (if needed)
+If simulated annealing doesn't perform well, consider:
+- **Genetic Algorithm**: Population-based optimization
+- **Constraint Programming**: Google OR-Tools (requires WASM)
+- **Tabu Search**: Memory-based metaheuristic
+- **Hybrid**: SA for initial solution, local search for refinement
+
+**Note**: Greedy algorithm is not an acceptable fallback option.
 
 ---
 
@@ -306,9 +328,9 @@ Test Scenarios:
 ### Rollback Procedures:
 
 Each phase should be feature-flagged or easily revertable:
-- Keep old algorithm code commented/archived
 - Use localStorage version key to detect migrations
 - Git tags allow quick rollback to previous deployment
+- Phase 1: If critical issues arise, revert to previous git tag while implementing alternative algorithm (genetic, constraint programming, etc.)
 
 ---
 
@@ -317,7 +339,7 @@ Each phase should be feature-flagged or easily revertable:
 | Phase | Risk Level | Main Risks | Mitigation |
 |-------|-----------|-----------|------------|
 | Phase 0 | Low | Build failures, environment issues | Test locally first, have rollback ready |
-| Phase 1 | High | Algorithm slower/worse than current, user confusion about changes | Performance testing, side-by-side comparison, keep greedy as fallback |
+| Phase 1 | High | Algorithm slower/worse, convergence issues | Extensive performance testing, benchmark against baseline, alternative algorithms ready (genetic, CP) |
 | Phase 2 | Medium | Over-constrained schedules, impossible solutions | Relaxation strategy, clear constraint violation messaging |
 | Phase 3 | Low | UX features have bugs, Excel parsing issues | Graceful degradation, CSV still works |
 | Phase 4 | Low | Optional features, minimal risk | Can skip entirely if not needed |
