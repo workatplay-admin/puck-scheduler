@@ -2,7 +2,7 @@
 
 Architecture Document v1.0
 
-# **1\. Design Philosophy**
+# **1. Design Philosophy**
 
 This is a single-user tool for one league commissioner. We optimize for shipping fast and keeping things simple. The guiding principles:
 
@@ -16,7 +16,7 @@ This is a single-user tool for one league commissioner. We optimize for shipping
 
 * Isolate the algorithm so we can rip it out and improve later.
 
-# **2\. Key Architectural Decisions**
+# **2. Key Architectural Decisions**
 
 ## **2.1 Client-Side Only**
 
@@ -34,145 +34,186 @@ The algorithm is non-deterministic by default (uses Math.random). This lets the 
 
 The scheduler is isolated in its own module with a clean interface. If we later need to swap in OR-Tools, a genetic algorithm, or a constraint solver, we only touch that module. The rest of the app doesn't care how the schedule was generated.
 
-# **3\. Tech Stack**
+# **3. Tech Stack**
 
 | Layer | Choice & Rationale |
 | :---- | :---- |
-| Framework | React \+ TypeScript. Type safety helps with complex algorithm logic. React is boring and works. |
+| Framework | React + TypeScript. Type safety helps with complex algorithm logic. React is boring and works. |
 | Build Tool | Vite. Fast dev server, simple config, good defaults. |
 | Styling | Tailwind CSS. Utility classes, no custom CSS files to manage. |
-| State | React Context \+ useReducer. Overkill to add Redux/Zustand for a single-user app. |
+| State | React Context + useReducer. Overkill to add Redux/Zustand for a single-user app. |
 | Persistence | localStorage. Simple, built-in, sufficient for one user. |
-| File Parsing | PapaParse (CSV) \+ SheetJS (Excel). Battle-tested libraries. |
+| File Parsing | PapaParse (CSV) + SheetJS (Excel). Battle-tested libraries. |
 | Hosting | Vercel. Free tier is plenty. Git push to deploy. |
 
-# **4\. Data Schemas**
+# **4. Data Schemas**
 
 All data is defined in TypeScript interfaces. These are the core types that flow through the application.
 
 ## **4.1 Input Types**
 
-// An available ice slot from the uploaded CSV/Excel  
-interface IceSlot {  
-  id: string;           // UUID, generated on import  
-  date: string;         // ISO date: '2025-01-15'  
-  startTime: string;    // 24h format: '21:15'  
-  dayOfWeek: number;    // 0=Sun, 1=Mon, ..., 6=Sat  
-  isLate: boolean;      // true if \>= lateThreshold  
-  isWeekend: boolean;   // true if Fri (5) or Sat (6)  
-}  
-   
-// A team entered by the commissioner  
-interface Team {  
-  id: string;           // UUID  
-  name: string;         // 'Sluggers'  
-  division: 'A' | 'B';  
+```ts
+// An available ice slot from the uploaded CSV/Excel
+interface IceSlot {
+  id: string;           // UUID, generated on import
+  date: string;         // ISO date: '2025-01-15'
+  startTime: string;    // 24h format: '21:15'
+  dayOfWeek: number;    // 0=Sun, 1=Mon, ..., 6=Sat
+  isLate: boolean;      // true if >= lateThreshold
+  isWeekend: boolean;   // true if Fri (5) or Sat (6)
 }
+
+// A team entered by the commissioner
+interface Team {
+  id: string;           // UUID
+  name: string;         // 'Sluggers'
+  division: 'A' | 'B';
+}
+```
 
 ## **4.2 Schedule Types**
 
-// A scheduled game (output of the algorithm)  
-interface Game {  
-  id: string;           // UUID  
-  slotId: string;       // References IceSlot.id  
-  homeTeamId: string;   // References Team.id  
-  awayTeamId: string;   // References Team.id  
-  division: 'A' | 'B';  
-}  
-   
-// The complete generated schedule  
-interface Schedule {  
-  games: Game\[\];  
-  seed: number;         // Random seed used (for reproducibility)  
-  generatedAt: string;  // ISO timestamp  
-  fairnessScore: number; // Lower is better  
+```ts
+// A scheduled game (output of the algorithm)
+interface Game {
+  id: string;           // UUID
+  slotId: string;       // References IceSlot.id
+  homeTeamId: string;   // References Team.id
+  awayTeamId: string;   // References Team.id
+  division: 'A' | 'B';
 }
+
+// The complete generated schedule
+interface Schedule {
+  games: Game[];
+  seed: number;         // Random seed used (for reproducibility)
+  generatedAt: string;  // ISO timestamp
+  fairnessScore: number; // Lower is better
+}
+```
 
 ## **4.3 Configuration Types**
 
-interface Settings {  
-  lateGameThreshold: string;   // '20:45' (8:45pm)  
-  lateSlotVarianceFlag: number; // Flag if variance \>= this (default: 2\)  
-  weekendVarianceFlag: number;  // Flag if variance \>= this (default: 3\)  
-  maxGamesPerWeek: number;      // Hard cap (default: 3\)  
+```ts
+interface Settings {
+  lateGameThreshold: string;   // '20:45' (8:45pm)
+  lateSlotVarianceFlag: number; // Flag if variance >= this (default: 2)
+  weekendVarianceFlag: number;  // Flag if variance >= this (default: 3)
+  maxGamesPerWeek: number;      // Hard cap (default: 3)
 }
+```
 
 ## **4.4 Fairness Report Types**
 
-interface TeamStats {  
-  teamId: string;  
-  totalGames: number;  
-  homeGames: number;  
-  awayGames: number;  
-  // Map of startTime \-\> count (e.g., '21:15' \-\> 4\)  
-  gamesByTimeSlot: Record\<string, number\>;  
-  // Map of dayOfWeek \-\> count (e.g., 5 \-\> 6 for Friday)  
-  gamesByDay: Record\<number, number\>;  
-  fridayGames: number;  
-  saturdayGames: number;  
-  // Map of opponentId \-\> count  
-  gamesByOpponent: Record\<string, number\>;  
-}  
-   
-interface FairnessReport {  
-  teamStats: TeamStats\[\];  
-  lateSlotVariance: Record\<string, number\>; // per time slot  
-  weekendVariance: number;  
-  flaggedTeams: string\[\];  // Team IDs exceeding thresholds  
+```ts
+interface TeamStats {
+  teamId: string;
+  totalGames: number;
+  homeGames: number;
+  awayGames: number;
+  // Map of startTime -> count (e.g., '21:15' -> 4)
+  gamesByTimeSlot: Record<string, number>;
+  // Map of dayOfWeek -> count (e.g., 5 -> 6 for Friday)
+  gamesByDay: Record<number, number>;
+  fridayGames: number;
+  saturdayGames: number;
+  // Map of opponentId -> count
+  gamesByOpponent: Record<string, number>;
 }
 
-# **5\. Scheduling Algorithm**
+interface FairnessReport {
+  teamStats: TeamStats[];
+  lateSlotVariance: Record<string, number>; // per time slot
+  weekendVariance: number;
+  flaggedTeams: string[];  // Team IDs exceeding thresholds
+}
+```
+
+# **5. Scheduling Algorithm**
 
 This is the heart of the application. The algorithm runs in four phases, each building on the previous. The entire process targets completion in under 15 seconds on a modern browser.
 
 ## **5.1 Phase 1: Day-to-Division Assignment**
 
-Assign each calendar date (with all its ice slots) to exactly one division. Goals:
-
-* Alternate divisions roughly (A, B, A, B...)
+Assign each calendar date (with all its ice slots) to exactly one division. **Primary goal: balance games-per-team across all divisions to ±1 (PRD §3.2.2 priority 1).** Secondary goals (tiebreakers, in order):
 
 * Balance Friday game-days between divisions
-
 * Balance Saturday game-days between divisions
-
 * Balance late slots between divisions
+* Alternate divisions roughly (A, B, A, B...) where the above leave room
+
+### Algorithm — proportional-target greedy assignment
+
+1. **Compute targets.** `total_team_games = 2 × total_slots`; `target_per_team = total_team_games / total_teams` (a real number). For each division `d`, `target_slots[d] = round(team_count[d] × total_slots / total_teams)`. If `sum(target_slots) ≠ total_slots` after rounding, nudge the largest target up or down by 1 so the budgets sum exactly.
+2. **Group and sort.** Group slots by date. Sort dates by `(slot_count_on_date desc, date asc)` — large-impact dates first so they can't push a division past its budget later.
+3. **Greedy assign.** For each date in sorted order, assign it to the division with the largest remaining budget (`target_slots[d] − assigned_slots_so_far[d]`). On ties, prefer the division that more needs the resources on that date (Friday/Saturday/late counts). On further ties, alternate A/B.
+4. **Feasibility check.** After assignment, verify `floor(target_per_team) ≤ games_per_team[d] ≤ ceil(target_per_team)` for every division. If not, return `{ ok: false, reason }` to the caller (which surfaces a warning in the Ice Times tab); otherwise return `{ ok: true }` alongside the date→division map. The post-run invariant in `scheduler/index.ts` is the final backstop if SA produces a violating schedule despite a feasible allocation.
 
 **Pseudo-code:**
 
-function assignDaysToDivisions(slots: IceSlot\[\]): Map\<string, Division\> {  
-  // Group slots by date  
-  const slotsByDate \= groupBy(slots, s \=\> s.date);  
-  const dates \= Object.keys(slotsByDate).sort();  
-    
-  // Count resources per date  
-  const dateInfo \= dates.map(date \=\> ({  
-    date,  
-    isFriday: slotsByDate\[date\]\[0\].dayOfWeek \=== 5,  
-    isSaturday: slotsByDate\[date\]\[0\].dayOfWeek \=== 6,  
-    lateCount: slotsByDate\[date\].filter(s \=\> s.isLate).length,  
-    totalSlots: slotsByDate\[date\].length  
-  }));  
-    
-  // Greedy assignment with balancing  
-  const assignment \= new Map\<string, 'A' | 'B'\>();  
-  let divATotals \= { fridays: 0, saturdays: 0, lateSlots: 0 };  
-  let divBTotals \= { fridays: 0, saturdays: 0, lateSlots: 0 };  
-    
-  for (const info of dateInfo) {  
-    // Pick division that needs more of this resource type  
-    const div \= pickDivisionToBalance(info, divATotals, divBTotals);  
-    assignment.set(info.date, div);  
-    // Update totals...  
-  }  
-    
-  return assignment;  
+```ts
+function assignDaysToDivisions(
+  slots: IceSlot[],
+  teams: Team[]
+): { ok: true; map: Map<string, Division> } | { ok: false; reason: string } {
+  const totalSlots = slots.length;
+  const totalTeams = teams.length;
+  const teamCount = countByDivision(teams); // { A: n, B: m }
+
+  // 1. Compute per-division slot budgets
+  const target: Record<Division, number> = {
+    A: Math.round(teamCount.A * totalSlots / totalTeams),
+    B: Math.round(teamCount.B * totalSlots / totalTeams),
+  };
+  if (target.A + target.B !== totalSlots) {
+    // Nudge the larger budget to absorb rounding
+    const larger = target.A >= target.B ? 'A' : 'B';
+    target[larger] += totalSlots - (target.A + target.B);
+  }
+
+  // 2. Group slots by date, sort by (slotCount desc, date asc)
+  const slotsByDate = groupBy(slots, s => s.date);
+  const dates = Object.keys(slotsByDate).sort((a, b) => {
+    const diff = slotsByDate[b].length - slotsByDate[a].length;
+    return diff !== 0 ? diff : a.localeCompare(b);
+  });
+
+  // 3. Greedy assignment by remaining budget
+  const assignment = new Map<string, Division>();
+  const assigned: Record<Division, number> = { A: 0, B: 0 };
+  const resourceTotals = { A: emptyResources(), B: emptyResources() };
+
+  for (const date of dates) {
+    const dateSlots = slotsByDate[date];
+    const remaining: Record<Division, number> = {
+      A: target.A - assigned.A,
+      B: target.B - assigned.B,
+    };
+    const div = pickDivision(remaining, dateSlots, resourceTotals);
+    assignment.set(date, div);
+    assigned[div] += dateSlots.length;
+    updateResources(resourceTotals[div], dateSlots);
+  }
+
+  // 4. Feasibility check
+  const targetPerTeam = (2 * totalSlots) / totalTeams;
+  for (const d of ['A', 'B'] as const) {
+    const gpt = (assigned[d] * 2) / teamCount[d];
+    if (gpt < Math.floor(targetPerTeam) || gpt > Math.ceil(targetPerTeam)) {
+      return { ok: false, reason: `Division ${d} cannot reach ±1 games-per-team with current slot/team mix.` };
+    }
+  }
+  return { ok: true, map: assignment };
 }
+```
+
+**Tiebreak detail.** `pickDivision` chooses by `remaining_budget` first (largest wins). When `remaining.A === remaining.B`, it prefers the division most under-supplied on whichever resource this date carries most — Friday, Saturday, or late slots — using `resourceTotals`. Further ties fall back to alternation.
 
 ## **5.2 Phase 2: Matchup Generation**
 
 Generate all required matchups for each division. With N teams and G games per team:
 
-* Total games in division \= (N × G) / 2
+* Total games in division = (N × G) / 2
 
 * Each pairing plays G / (N-1) times, ±1
 
@@ -180,38 +221,40 @@ Generate all required matchups for each division. With N teams and G games per t
 
 **Pseudo-code:**
 
-function generateMatchups(teams: Team\[\], totalSlots: number): Matchup\[\] {  
-  const n \= teams.length;  
-  const gamesNeeded \= totalSlots; // One game per slot assigned to this division  
-    
-  // Generate all possible pairings  
-  const pairings: \[Team, Team\]\[\] \= \[\];  
-  for (let i \= 0; i \< n; i++) {  
-    for (let j \= i \+ 1; j \< n; j++) {  
-      pairings.push(\[teams\[i\], teams\[j\]\]);  
-    }  
-  }  
-    
-  // Repeat round-robin until we have enough games  
-  const matchups: Matchup\[\] \= \[\];  
-  let pairingCounts \= new Map\<string, number\>(); // Track how many times each pairing used  
-    
-  while (matchups.length \< gamesNeeded) {  
-    // Find pairing with lowest count  
-    const nextPairing \= pairings.reduce((min, p) \=\> {  
-      const key \= pairingKey(p);  
-      const count \= pairingCounts.get(key) || 0;  
-      const minCount \= pairingCounts.get(pairingKey(min)) || 0;  
-      return count \< minCount ? p : min;  
-    });  
-      
-    matchups.push({ team1: nextPairing\[0\], team2: nextPairing\[1\] });  
-    pairingCounts.set(pairingKey(nextPairing),   
-      (pairingCounts.get(pairingKey(nextPairing)) || 0\) \+ 1);  
-  }  
-    
-  return matchups;  
+```text
+function generateMatchups(teams: Team[], totalSlots: number): Matchup[] {
+  const n = teams.length;
+  const gamesNeeded = totalSlots; // One game per slot assigned to this division
+
+  // Generate all possible pairings
+  const pairings: [Team, Team][] = [];
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      pairings.push([teams[i], teams[j]]);
+    }
+  }
+
+  // Repeat round-robin until we have enough games
+  const matchups: Matchup[] = [];
+  let pairingCounts = new Map<string, number>(); // Track how many times each pairing used
+
+  while (matchups.length < gamesNeeded) {
+    // Find pairing with lowest count
+    const nextPairing = pairings.reduce((min, p) => {
+      const key = pairingKey(p);
+      const count = pairingCounts.get(key) || 0;
+      const minCount = pairingCounts.get(pairingKey(min)) || 0;
+      return count < minCount ? p : min;
+    });
+
+    matchups.push({ team1: nextPairing[0], team2: nextPairing[1] });
+    pairingCounts.set(pairingKey(nextPairing),
+      (pairingCounts.get(pairingKey(nextPairing)) || 0) + 1);
+  }
+
+  return matchups;
 }
+```
 
 ## **5.3 Phase 3: Slot Assignment (The Hard Part)**
 
@@ -226,43 +269,45 @@ The scoring function quantifies "unfairness" as a single number. Lower is better
 | Late slot variance (per time) | 1000 | Highest priority per PRD. Players hate late games. |
 | Weekend variance | 100 | Second priority. Friday/Saturday games are undesirable. |
 | Consecutive opponent penalty | 50 | Avoid playing same team in back-to-back weeks. |
-| Rest day violation (\<2 days) | 25 | Soft constraint. Less than 2 days rest is bad. |
+| Rest day violation (<2 days) | 25 | Soft constraint. Less than 2 days rest is bad. |
 | Max games/week violation | 10000 | Hard constraint. Massive penalty ensures this is never violated. |
 
 **Scoring Function Pseudo-code:**
 
-function calculateFairnessScore(games: Game\[\], slots: IceSlot\[\], teams: Team\[\]): number {  
-  let score \= 0;  
-  const teamStats \= computeTeamStats(games, slots);  
-    
-  // 1\. Late slot variance (per distinct late time)  
-  const lateTimeSlots \= \[...new Set(slots.filter(s \=\> s.isLate).map(s \=\> s.startTime))\];  
-  for (const timeSlot of lateTimeSlots) {  
-    const counts \= teams.map(t \=\> teamStats\[t.id\].gamesByTimeSlot\[timeSlot\] || 0);  
-    const variance \= Math.max(...counts) \- Math.min(...counts);  
-    score \+= variance \* variance \* 1000;  // Squared to penalize large gaps more  
-  }  
-    
-  // 2\. Weekend variance  
-  const weekendCounts \= teams.map(t \=\>   
-    teamStats\[t.id\].fridayGames \+ teamStats\[t.id\].saturdayGames);  
-  const weekendVariance \= Math.max(...weekendCounts) \- Math.min(...weekendCounts);  
-  score \+= weekendVariance \* weekendVariance \* 100;  
-    
-  // 3\. Consecutive opponent penalty  
-  const consecutiveCount \= countConsecutiveOpponentGames(games, slots);  
-  score \+= consecutiveCount \* 50;  
-    
-  // 4\. Rest day violations  
-  const restViolations \= countRestDayViolations(games, slots, teams);  
-  score \+= restViolations \* 25;  
-    
-  // 5\. Max games per week violations (HARD constraint)  
-  const maxGameViolations \= countMaxGamesPerWeekViolations(games, slots, teams);  
-  score \+= maxGameViolations \* 10000;  
-    
-  return score;  
+```text
+function calculateFairnessScore(games: Game[], slots: IceSlot[], teams: Team[]): number {
+  let score = 0;
+  const teamStats = computeTeamStats(games, slots);
+
+  // 1. Late slot variance (per distinct late time)
+  const lateTimeSlots = [...new Set(slots.filter(s => s.isLate).map(s => s.startTime))];
+  for (const timeSlot of lateTimeSlots) {
+    const counts = teams.map(t => teamStats[t.id].gamesByTimeSlot[timeSlot] || 0);
+    const variance = Math.max(...counts) - Math.min(...counts);
+    score += variance * variance * 1000;  // Squared to penalize large gaps more
+  }
+
+  // 2. Weekend variance
+  const weekendCounts = teams.map(t =>
+    teamStats[t.id].fridayGames + teamStats[t.id].saturdayGames);
+  const weekendVariance = Math.max(...weekendCounts) - Math.min(...weekendCounts);
+  score += weekendVariance * weekendVariance * 100;
+
+  // 3. Consecutive opponent penalty
+  const consecutiveCount = countConsecutiveOpponentGames(games, slots);
+  score += consecutiveCount * 50;
+
+  // 4. Rest day violations
+  const restViolations = countRestDayViolations(games, slots, teams);
+  score += restViolations * 25;
+
+  // 5. Max games per week violations (HARD constraint)
+  const maxGameViolations = countMaxGamesPerWeekViolations(games, slots, teams);
+  score += maxGameViolations * 10000;
+
+  return score;
 }
+```
 
 ### **5.3.2 Simulated Annealing**
 
@@ -270,48 +315,50 @@ We use simulated annealing because it's simple to implement, handles soft constr
 
 **Algorithm Pseudo-code:**
 
-function optimizeSchedule(  
-  matchups: Matchup\[\],   
-  slots: IceSlot\[\],  
-  maxIterations: number \= 50000  
-): Game\[\] {  
-  // Initial assignment: random shuffle of matchups to slots  
-  let current \= createInitialAssignment(matchups, slots);  
-  let currentScore \= calculateFairnessScore(current);  
-  let best \= current;  
-  let bestScore \= currentScore;  
-    
-  // Annealing parameters  
-  let temperature \= 1000;  
-  const coolingRate \= 0.9997;  // Slow cooling for better results  
-  const minTemperature \= 0.1;  
-    
-  for (let i \= 0; i \< maxIterations && temperature \> minTemperature; i++) {  
-    // Generate neighbor by swapping two random games (same division)  
-    const neighbor \= swapTwoGames(current);  
-    const neighborScore \= calculateFairnessScore(neighbor);  
-    const delta \= neighborScore \- currentScore;  
-      
-    // Accept if better, or probabilistically if worse  
-    if (delta \< 0 || Math.random() \< Math.exp(-delta / temperature)) {  
-      current \= neighbor;  
-      currentScore \= neighborScore;  
-        
-      if (currentScore \< bestScore) {  
-        best \= current;  
-        bestScore \= currentScore;  
-      }  
-    }  
-      
-    temperature \*= coolingRate;  
-  }  
-    
-  return best;  
+```text
+function optimizeSchedule(
+  matchups: Matchup[],
+  slots: IceSlot[],
+  maxIterations: number = 50000
+): Game[] {
+  // Initial assignment: random shuffle of matchups to slots
+  let current = createInitialAssignment(matchups, slots);
+  let currentScore = calculateFairnessScore(current);
+  let best = current;
+  let bestScore = currentScore;
+
+  // Annealing parameters
+  let temperature = 1000;
+  const coolingRate = 0.9997;  // Slow cooling for better results
+  const minTemperature = 0.1;
+
+  for (let i = 0; i < maxIterations && temperature > minTemperature; i++) {
+    // Generate neighbor by swapping two random games (same division)
+    const neighbor = swapTwoGames(current);
+    const neighborScore = calculateFairnessScore(neighbor);
+    const delta = neighborScore - currentScore;
+
+    // Accept if better, or probabilistically if worse
+    if (delta < 0 || Math.random() < Math.exp(-delta / temperature)) {
+      current = neighbor;
+      currentScore = neighborScore;
+
+      if (currentScore < bestScore) {
+        best = current;
+        bestScore = currentScore;
+      }
+    }
+
+    temperature *= coolingRate;
+  }
+
+  return best;
 }
+```
 
 **Why these parameters?**
 
-* 50,000 iterations: Enough to explore the solution space for 150 games. Takes \~5-10 seconds.
+* 50,000 iterations: Enough to explore the solution space for 150 games. Takes ~5-10 seconds.
 
 * Initial temperature 1000: Matches the scale of our scoring weights.
 
@@ -323,62 +370,66 @@ After slots are assigned, we designate home/away for each game. This is a simple
 
 **Pseudo-code:**
 
-function assignHomeAway(games: Game\[\]): Game\[\] {  
-  const homeCount \= new Map\<string, number\>();  // teamId \-\> home game count  
-    
-  // Sort games by date so we can balance as we go  
-  const sorted \= \[...games\].sort((a, b) \=\> a.date.localeCompare(b.date));  
-    
-  return sorted.map(game \=\> {  
-    const team1Home \= homeCount.get(game.team1Id) || 0;  
-    const team2Home \= homeCount.get(game.team2Id) || 0;  
-      
-    // Give home to team with fewer home games  
-    // Ties broken randomly for variety  
-    let homeTeam, awayTeam;  
-    if (team1Home \< team2Home ||   
-        (team1Home \=== team2Home && Math.random() \< 0.5)) {  
-      homeTeam \= game.team1Id;  
-      awayTeam \= game.team2Id;  
-    } else {  
-      homeTeam \= game.team2Id;  
-      awayTeam \= game.team1Id;  
-    }  
-      
-    homeCount.set(homeTeam, (homeCount.get(homeTeam) || 0\) \+ 1);  
-    return { ...game, homeTeamId: homeTeam, awayTeamId: awayTeam };  
-  });  
-}
+```text
+function assignHomeAway(games: Game[]): Game[] {
+  const homeCount = new Map<string, number>();  // teamId -> home game count
 
-# **6\. Module Structure**
+  // Sort games by date so we can balance as we go
+  const sorted = [...games].sort((a, b) => a.date.localeCompare(b.date));
+
+  return sorted.map(game => {
+    const team1Home = homeCount.get(game.team1Id) || 0;
+    const team2Home = homeCount.get(game.team2Id) || 0;
+
+    // Give home to team with fewer home games
+    // Ties broken randomly for variety
+    let homeTeam, awayTeam;
+    if (team1Home < team2Home ||
+        (team1Home === team2Home && Math.random() < 0.5)) {
+      homeTeam = game.team1Id;
+      awayTeam = game.team2Id;
+    } else {
+      homeTeam = game.team2Id;
+      awayTeam = game.team1Id;
+    }
+
+    homeCount.set(homeTeam, (homeCount.get(homeTeam) || 0) + 1);
+    return { ...game, homeTeamId: homeTeam, awayTeamId: awayTeam };
+  });
+}
+```
+
+# **6. Module Structure**
 
 The codebase is organized into isolated modules. The scheduling algorithm is deliberately separated so we can swap implementations later.
 
-src/  
-├── components/          \# React UI components  
-│   ├── IceTimesTab.tsx  
-│   ├── TeamsTab.tsx  
-│   ├── ScheduleTab.tsx  
-│   ├── ExportTab.tsx  
-│   ├── SettingsPanel.tsx  
-│   └── FairnessReport.tsx  
-├── scheduler/           \# ← ISOLATED: Can swap this entire module  
-│   ├── index.ts         \# Public API: generateSchedule()  
-│   ├── dayAssignment.ts \# Phase 1  
-│   ├── matchups.ts      \# Phase 2  
-│   ├── slotOptimizer.ts \# Phase 3 (simulated annealing)  
-│   ├── homeAway.ts      \# Phase 4  
-│   ├── scoring.ts       \# Fairness scoring function  
-│   └── types.ts         \# Internal types  
-├── parsers/             \# File parsing (CSV, Excel)  
-│   ├── csvParser.ts  
-│   └── excelParser.ts  
-├── state/               \# React context \+ reducers  
-│   ├── AppContext.tsx  
-│   └── reducer.ts  
-├── utils/               \# Helpers (date formatting, etc.)  
-├── types.ts             \# Shared TypeScript types  
-└── App.tsx              \# Main app shell
+```text
+src/
+├── components/          # React UI components
+│   ├── IceTimesTab.tsx
+│   ├── TeamsTab.tsx
+│   ├── ScheduleTab.tsx
+│   ├── ExportTab.tsx
+│   ├── SettingsPanel.tsx
+│   └── FairnessReport.tsx
+├── scheduler/           # ← ISOLATED: Can swap this entire module
+│   ├── index.ts         # Public API: generateSchedule()
+│   ├── dayAssignment.ts # Phase 1
+│   ├── matchups.ts      # Phase 2
+│   ├── slotOptimizer.ts # Phase 3 (simulated annealing)
+│   ├── homeAway.ts      # Phase 4
+│   ├── scoring.ts       # Fairness scoring function
+│   └── types.ts         # Internal types
+├── parsers/             # File parsing (CSV, Excel)
+│   ├── csvParser.ts
+│   └── excelParser.ts
+├── state/               # React context + reducers
+│   ├── AppContext.tsx
+│   └── reducer.ts
+├── utils/               # Helpers (date formatting, etc.)
+├── types.ts             # Shared TypeScript types
+└── App.tsx              # Main app shell
+```
 
 **Key Design Decisions:**
 
@@ -388,41 +439,52 @@ src/
 
 * If we later want to use OR-Tools or a different approach, we replace only scheduler/.
 
-# **7\. Data Flow**
+# **7. Data Flow**
 
 The application follows a linear workflow with clear data transformations at each step.
 
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐  
-│  CSV/Excel  │ ──► │  IceSlot\[\]  │ ──► │             │ ──► │  Schedule   │  
-│  Upload     │     │             │     │  Scheduler  │     │  (games,    │  
-└─────────────┘     └─────────────┘     │  Module     │     │   seed,     │  
-                                        │             │     │   score)    │  
-┌─────────────┐     ┌─────────────┐     │             │     └─────────────┘  
-│  Team       │ ──► │  Team\[\]     │ ──► │             │            │  
-│  Entry Form │     │             │     └─────────────┘            │  
-└─────────────┘     └─────────────┘                                ▼  
-                                                          ┌─────────────┐  
-┌─────────────┐                                           │  Fairness   │  
-│  Settings   │ ──────────────────────────────────────────│  Report     │  
-│  Panel      │                                           └─────────────┘  
-└─────────────┘                                                  │  
-                                                                 ▼  
-                                                          ┌─────────────┐  
-                                                          │  CSV Export │  
+```text
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  CSV/Excel  │ ──► │  IceSlot[]  │ ──► │             │ ──► │  Schedule   │
+│  Upload     │     │             │     │  Scheduler  │     │  (games,    │
+└─────────────┘     └─────────────┘     │  Module     │     │   seed,     │
+                                        │             │     │   score)    │
+┌─────────────┐     ┌─────────────┐     │             │     └─────────────┘
+│  Team       │ ──► │  Team[]     │ ──► │             │            │
+│  Entry Form │     │             │     └─────────────┘            │
+└─────────────┘     └─────────────┘                                ▼
+                                                          ┌─────────────┐
+┌─────────────┐                                           │  Fairness   │
+│  Settings   │ ──────────────────────────────────────────│  Report     │
+│  Panel      │                                           └─────────────┘
+└─────────────┘                                                  │
+                                                                 ▼
+                                                          ┌─────────────┐
+                                                          │  CSV Export │
                                                           └─────────────┘
+```
 
-# **8\. Persistence Strategy**
+# **8. Persistence Strategy**
 
 All data is stored in localStorage. This is sufficient for a single-user application and avoids any backend complexity.
 
 | Key | Data | When Updated |
 | :---- | :---- | :---- |
-| hockey\_slots | IceSlot\[\] \- imported ice times | After file upload |
-| hockey\_teams | Team\[\] \- entered teams | After team add/delete |
-| hockey\_schedule | Schedule \- generated schedule | After generate/edit |
-| hockey\_settings | Settings \- fairness thresholds | After settings save |
+| hockey_slots | IceSlot[] - imported ice times | After file upload |
+| hockey_teams | Team[] - entered teams | After team add/delete |
+| hockey_schedule | Schedule - generated schedule | After generate/edit |
+| hockey_settings | Settings - fairness thresholds | After settings save |
 
-# **9\. Future Considerations**
+## Deviations from Original Design
+
+| Section | Original Design | Actual Implementation | Reason |
+| :---- | :---- | :---- | :---- |
+| §3 State | React Context + useReducer | Custom useState hook (`useSchedulerStore.ts`) | Simpler for single-component tree; no external Zustand dependency needed |
+| §6 Module | `src/parsers/` with stub csvParser | `src/parsers/` with PapaParse CSV + SheetJS Excel | Tickets DAV-48/50 upgraded to real parsers |
+| §6 Module | `src/state/` with AppContext + reducer | `src/hooks/useSchedulerStore.ts` | Flat hook is simpler; no routing needed |
+| §4.1 IceSlot | `isLate: boolean`, `isWeekend: boolean` stored | Derived at render via `isDerivedLate`/`isDerivedWeekend` | Avoids stale stored state when threshold changes |
+
+# **9. Future Considerations**
 
 These are things we might want to change later. The architecture is designed so these can be swapped without rewriting the whole app.
 
@@ -450,11 +512,11 @@ If multiple commissioners need access, we'd add:
 
 Would require a separate module with different constraints (bracket-based, single elimination, etc.). Completely different problem — don't try to generalize the regular season scheduler.
 
-# **10\. Risks & Mitigations**
+# **10. Risks & Mitigations**
 
 | Risk | Mitigation |
 | :---- | :---- |
-| Algorithm too slow on weak hardware | Progress indicator \+ "this may take up to 30 seconds". If chronic, move to serverless function. |
+| Algorithm too slow on weak hardware | Progress indicator + "this may take up to 30 seconds". If chronic, move to serverless function. |
 | Commissioner clears browser data | Prominent warning to export. Schedule loss is recoverable by re-importing and regenerating. |
 | Unfair schedules despite algorithm | Manual swap feature as escape hatch. Fairness report makes any unfairness visible and quantified. |
 | Edge cases in input data | Validate on import. Reject invalid rows with clear error messages. Don't crash — fail gracefully. |
