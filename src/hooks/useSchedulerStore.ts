@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { SchedulerState, IceSlot, Team, Game, Schedule, SchedulerSettings, FairnessReport, DEFAULT_SETTINGS } from '@/types/scheduler';
 import { calculateFairnessReport } from '@/scheduler';
+import { scheduleWrite, flushPending, cancelPending } from '@/lib/debouncedStorage';
 
 const STORAGE_SLOTS_KEY = 'hockey_slots';
 const STORAGE_TEAMS_KEY = 'hockey_teams';
@@ -67,26 +68,29 @@ export const useSchedulerStore = () => {
   const [state, setState] = useState<SchedulerState>(getInitialState);
 
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_SLOTS_KEY, JSON.stringify(state.iceSlots)); } catch { /* ignore */ }
+    scheduleWrite(STORAGE_SLOTS_KEY, JSON.stringify(state.iceSlots));
   }, [state.iceSlots]);
 
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_TEAMS_KEY, JSON.stringify(state.teams)); } catch { /* ignore */ }
+    scheduleWrite(STORAGE_TEAMS_KEY, JSON.stringify(state.teams));
   }, [state.teams]);
 
   useEffect(() => {
-    try {
-      if (state.schedule !== null) {
-        localStorage.setItem(STORAGE_SCHEDULE_KEY, JSON.stringify(state.schedule));
-      } else {
-        localStorage.removeItem(STORAGE_SCHEDULE_KEY);
-      }
-    } catch { /* ignore */ }
+    scheduleWrite(
+      STORAGE_SCHEDULE_KEY,
+      state.schedule !== null ? JSON.stringify(state.schedule) : null,
+    );
   }, [state.schedule]);
 
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(state.settings)); } catch { /* ignore */ }
+    scheduleWrite(STORAGE_SETTINGS_KEY, JSON.stringify(state.settings));
   }, [state.settings]);
+
+  useEffect(() => {
+    const onUnload = () => flushPending();
+    window.addEventListener('beforeunload', onUnload);
+    return () => window.removeEventListener('beforeunload', onUnload);
+  }, []);
 
   /** Replaces the full set of ice slots (used after CSV import). */
   const setIceSlots = useCallback((slots: IceSlot[]) => {
@@ -215,6 +219,7 @@ export const useSchedulerStore = () => {
 
   /** Resets all state and clears localStorage — used for "Start New Season". */
   const clearAll = useCallback(() => {
+    cancelPending();
     try {
       localStorage.removeItem(STORAGE_SLOTS_KEY);
       localStorage.removeItem(STORAGE_TEAMS_KEY);
