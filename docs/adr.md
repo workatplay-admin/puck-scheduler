@@ -483,6 +483,7 @@ All data is stored in localStorage. This is sufficient for a single-user applica
 | §6 Module | `src/parsers/` with stub csvParser | `src/parsers/` with PapaParse CSV + SheetJS Excel | Tickets DAV-48/50 upgraded to real parsers |
 | §6 Module | `src/state/` with AppContext + reducer | `src/hooks/useSchedulerStore.ts` | Flat hook is simpler; no routing needed |
 | §4.1 IceSlot | `isLate: boolean`, `isWeekend: boolean` stored | Derived at render via `isDerivedLate`/`isDerivedWeekend` | Avoids stale stored state when threshold changes |
+| §8 Coverage | Per-path threshold on `src/hooks/useSchedulerStore.ts` | Threshold deferred until React hook test infrastructure (jsdom + @testing-library/react) lands | DAV-64 acceptance criteria forbid coverage-padding tests; store coverage tickets to follow |
 
 # **9. Future Considerations**
 
