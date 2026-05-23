@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "audit:standards": "node scripts/audit-standards.mjs",
-    "perf": "node scripts/perf.mjs"
+    "perf": "node scripts/perf.mjs",
+    "smoke": "npm run build && vite preview --port 4173"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
