@@ -49,8 +49,8 @@ export const calculateFairnessReport = (
         Friday: 0, Saturday: 0, Sunday: 0,
       },
       opponentGames: {},
-      worstVariance: 0,
-      worstVarianceSlot: '',
+      totalLateGames: 0,
+      lateSurplus: 0,
       lateSlotFlagged: false,
       weekendFlagged: false,
     });
@@ -106,25 +106,50 @@ export const calculateFairnessReport = (
   for (const division of ['A', 'B'] as ('A' | 'B')[]) {
     const divisionTeams = teams.filter(t => t.division === division);
 
-    for (const lateSlot of lateTimeSlots) {
-      const counts = divisionTeams.map(t => teamStatsMap.get(t.name)!.timeSlots[lateSlot] || 0);
-      const minCount = Math.min(...counts);
+    // Late Surplus per team: aggregate late-game counts, compare against the
+    // floor computed over scheduled teams only. A team with zero games is excluded
+    // from the floor calculation so it can't artificially inflate every other
+    // team's surplus (see late-fairness-redefinition.md §Metric). The unscheduled
+    // team still appears in the report with totalLateGames=0, lateSurplus=0, and
+    // is never flagged. Floor population may shift between regenerations if the
+    // roster changes — this is intentional; the floor reflects the schedule that
+    // exists, not a frozen baseline.
+    for (const team of divisionTeams) {
+      const stats = teamStatsMap.get(team.name)!;
+      stats.totalLateGames = lateTimeSlots.reduce(
+        (sum, slot) => sum + (stats.timeSlots[slot] || 0),
+        0
+      );
+    }
 
-      for (const team of divisionTeams) {
-        const stats = teamStatsMap.get(team.name)!;
-        const variance = (stats.timeSlots[lateSlot] || 0) - minCount;
-        if (variance > stats.worstVariance) {
-          stats.worstVariance = variance;
-          stats.worstVarianceSlot = lateSlot;
-        }
-        if (variance > settings.lateSlotVarianceFlag) {
-          stats.lateSlotFlagged = true;
-        }
+    const scheduledDivTeams = divisionTeams.filter(
+      t => teamStatsMap.get(t.name)!.totalGames > 0
+    );
+    const divisionFloor = scheduledDivTeams.length > 0
+      ? Math.min(...scheduledDivTeams.map(t => teamStatsMap.get(t.name)!.totalLateGames))
+      : 0;
+
+    const scheduledNames = new Set(scheduledDivTeams.map(t => t.name));
+    for (const team of divisionTeams) {
+      const stats = teamStatsMap.get(team.name)!;
+      // Unscheduled teams are excluded from the comparison: lateSurplus stays 0.
+      const surplus = scheduledNames.has(team.name)
+        ? stats.totalLateGames - divisionFloor
+        : 0;
+      // Tripwire: by construction every scheduled team's total is ≥ floor.
+      // A negative surplus would mean a bug in scheduledDivTeams filtering or floor computation.
+      if (surplus < 0) {
+        throw new Error(
+          `Negative Late Surplus for ${team.name} in division ${division}: ${surplus}`
+        );
       }
+      stats.lateSurplus = surplus;
+      stats.lateSlotFlagged = scheduledNames.has(team.name)
+        && surplus > settings.lateSlotVarianceFlag;
     }
 
     const weekendCounts = divisionTeams.map(t => teamStatsMap.get(t.name)!.totalWeekend);
-    const minWeekend = Math.min(...weekendCounts);
+    const minWeekend = weekendCounts.length > 0 ? Math.min(...weekendCounts) : 0;
 
     for (const team of divisionTeams) {
       const stats = teamStatsMap.get(team.name)!;

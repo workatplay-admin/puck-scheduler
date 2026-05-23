@@ -109,9 +109,11 @@ The algorithm must first assign each game day (calendar date) to exactly one div
 
 **1. Late time slot distribution (8:45pm or later by default)**
 
-* Track each distinct late start time separately (e.g., 8:45pm, 9:15pm, 10:15pm are tracked individually)
-* A 10:15pm game is significantly worse than an 8:45pm game—they are not equivalent
-* Minimize disparity: no team should exceed the configured variance threshold at any specific late time slot
+* The user-facing fairness metric is **Late Surplus** — total late games per team, compared against the team with the fewest late games in the same division (among teams that have at least one scheduled game)
+* `lateSurplus(team) = totalLateGames(team) − divisionFloor`; a team is flagged when this exceeds the configured threshold (strict-greater)
+* Teams with no scheduled games are excluded from the floor calculation so they cannot artificially inflate every other team's surplus
+* A 10:15pm game and an 8:45pm game are both "late games" and count equally toward the aggregate. Distribution across individual late times is a secondary optimization signal (prevents stacking a team's late games on the latest slot specifically) but is not the primary fairness measure
+* The per-time grid is still shown in the Time Slot Distribution table for reference
 * Not tracked for fairness: Distribution of early/prime slots (5:00pm, 6:30pm, 7:45pm, etc.) is shown for reference but not graded
 
 **2. Undesirable day distribution (Friday and Saturday)**
@@ -177,13 +179,13 @@ Shows ALL time slots. Late slots (8:45pm+) are marked with ⚠ and tracked for f
 
 **Section C: Late Slot Fairness Summary**
 
-| Team | Worst Variance | Slot | Flagged? |
+| Team | Total Late | Late Surplus | Flagged? |
 | :---- | :---- | :---- | :---- |
-| Sluggers | +1 | 10:15pm | ✓ OK |
-| Icehogs | +1 | 9:15pm | ✓ OK |
-| Rebels | +2 | 10:15pm | ⚠ FLAG |
+| Sluggers | 10 | +1 | ✓ OK |
+| Icehogs | 10 | +1 | ✓ OK |
+| Rebels | 12 | +3 | ⚠ FLAG |
 
-*(Flagged if variance exceeds configured threshold)*
+*Late Surplus = team's total late games minus the lowest total in their division. Flagged if it strictly exceeds the configured threshold (default +2).*
 
 **Section D: Friday & Saturday Games**
 
@@ -273,7 +275,7 @@ A simple settings panel accessible from the main interface, allowing the commiss
 | Setting | Description | Default | Range |
 | :---- | :---- | :---- | :---- |
 | Late game threshold | Start time at or after which a game is considered "late" | 8:45pm | Any time |
-| Late slot variance flag | Flag a team if they have this many more games than another team at any specific late time slot | 2 | 1–5 |
+| Late slot variance flag | Flag a team if they play this many more late-slot games in total than the team with the fewest in their division | 2 | 1–5 |
 | Weekend variance flag | Flag a team if they have this many more Friday/Saturday games than another team | 3 | 1–10 |
 | Max games per week | Hard cap on games per team in any 7-day window | 3 | 2–5 |
 

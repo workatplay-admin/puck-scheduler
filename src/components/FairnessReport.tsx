@@ -187,6 +187,9 @@ export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdat
                 </span>
                 <ChevronDown className={`w-4 h-4 transition-transform ${openSections.has('late') ? 'rotate-180' : ''}`} />
               </CardTitle>
+              <p className="text-xs text-muted-foreground text-left mt-1">
+                Total late games per team, compared against the division minimum.
+              </p>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -196,8 +199,8 @@ export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdat
                   <tr>
                     <th>Team</th>
                     <th>Division</th>
-                    <th>Worst Variance</th>
-                    <th>Slot</th>
+                    <th className="text-right">Total Late</th>
+                    <th className="text-right">Late Surplus</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -210,8 +213,8 @@ export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdat
                           {stat.division}
                         </span>
                       </td>
-                      <td className="font-mono tabular-nums">+{stat.worstVariance}</td>
-                      <td>{stat.worstVarianceSlot ? formatTime(stat.worstVarianceSlot) : 'N/A'}</td>
+                      <td className="text-right font-mono tabular-nums">{stat.totalLateGames}</td>
+                      <td className="text-right font-mono tabular-nums">+{stat.lateSurplus}</td>
                       <td>
                         <span className={stat.lateSlotFlagged ? 'badge-flagged' : 'badge-ok'}>
                           {stat.lateSlotFlagged ? '⚠ FLAG' : '✓ OK'}

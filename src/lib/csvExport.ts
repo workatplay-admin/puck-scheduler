@@ -76,14 +76,14 @@ export const generateExportCSV = (
   lines.push('');
 
   lines.push('LATE SLOT FAIRNESS SUMMARY');
-  lines.push('Team,Division,Worst Variance,Slot,Status');
+  lines.push('Team,Division,Total Late,Late Surplus,Status');
 
   for (const stat of report.teamStats) {
     lines.push([
       stat.teamName,
       `Division ${stat.division}`,
-      `+${stat.worstVariance}`,
-      stat.worstVarianceSlot ? formatTime(stat.worstVarianceSlot) : 'N/A',
+      stat.totalLateGames,
+      `+${stat.lateSurplus}`,
       stat.lateSlotFlagged ? 'FLAGGED' : 'OK',
     ].join(','));
   }

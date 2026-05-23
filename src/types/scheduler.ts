@@ -30,6 +30,10 @@ export interface Schedule {
 
 export interface SchedulerSettings {
   lateGameThreshold: string;
+  /**
+   * Maximum allowed Late Surplus (total late games above the division minimum)
+   * before a team is flagged. Historical field name; kept for localStorage compatibility.
+   */
   lateSlotVarianceFlag: number;
   weekendVarianceFlag: number;
   maxGamesPerWeek: number;
@@ -45,8 +49,8 @@ export interface TeamStats {
   totalWeekend: number;
   dayOfWeekGames: Record<string, number>;
   opponentGames: Record<string, number>;
-  worstVariance: number;
-  worstVarianceSlot: string;
+  totalLateGames: number;
+  lateSurplus: number;
   lateSlotFlagged: boolean;
   weekendFlagged: boolean;
 }

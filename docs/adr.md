@@ -123,7 +123,8 @@ interface TeamStats {
 
 interface FairnessReport {
   teamStats: TeamStats[];
-  lateSlotVariance: Record<string, number>; // per time slot
+  // Per-team aggregate: totalLateGames(team) − divisionFloor(team.division)
+  lateGameVarianceByTeam: Record<string, number>;
   weekendVariance: number;
   flaggedTeams: string[];  // Team IDs exceeding thresholds
 }
@@ -266,7 +267,9 @@ The scoring function quantifies "unfairness" as a single number. Lower is better
 
 | Constraint | Weight | Rationale |
 | :---- | :---- | :---- |
-| Late slot variance (per time) | 1000 | Highest priority per PRD. Players hate late games. |
+| **Total late-game count variance (per team)** | **1000** | Primary fairness signal per PRD §3.2.3. Equalizes how many late games each team plays in total. |
+| Max late surplus (per division) | 250 | Aligns the optimizer with the user-visible flagged condition (`max(lateSurplus) > threshold`). |
+| Per-individual-late-slot variance | 100 | Secondary signal. Prevents a team's late games from concentrating on the latest slot specifically. |
 | Weekend variance | 100 | Second priority. Friday/Saturday games are undesirable. |
 | Consecutive opponent penalty | 50 | Avoid playing same team in back-to-back weeks. |
 | Rest day violation (<2 days) | 25 | Soft constraint. Less than 2 days rest is bad. |
@@ -279,12 +282,39 @@ function calculateFairnessScore(games: Game[], slots: IceSlot[], teams: Team[]):
   let score = 0;
   const teamStats = computeTeamStats(games, slots);
 
-  // 1. Late slot variance (per distinct late time)
+  // 1. Late-game variance — computed PER DIVISION (matches scoring.ts which iterates
+  //    a `divisions` set; a cross-division mean would conflate the two leagues).
   const lateTimeSlots = [...new Set(slots.filter(s => s.isLate).map(s => s.startTime))];
-  for (const timeSlot of lateTimeSlots) {
-    const counts = teams.map(t => teamStats[t.id].gamesByTimeSlot[timeSlot] || 0);
-    const variance = Math.max(...counts) - Math.min(...counts);
-    score += variance * variance * 1000;  // Squared to penalize large gaps more
+  for (const div of ['A', 'B'] as const) {
+    const divTeams = teams.filter(t => t.division === div);
+    if (divTeams.length === 0) continue;
+
+    // Restrict to scheduled teams — a team with 0 games would otherwise become the
+    // floor and inflate every other team's surplus (see PRD §3.2.3, late-fairness-redefinition.md §Metric).
+    const scheduledDivTeams = divTeams.filter(t => teamStats[t.id].totalGames > 0);
+    if (scheduledDivTeams.length === 0) continue;
+
+    // 1a. Total late-game count variance per team (PRIMARY — equalizes total late burden)
+    const totalLateByTeam = scheduledDivTeams.map(t =>
+      lateTimeSlots.reduce((sum, ts) => sum + (teamStats[t.id].gamesByTimeSlot[ts] || 0), 0)
+    );
+    const lateMean = totalLateByTeam.reduce((s, c) => s + c, 0) / totalLateByTeam.length;
+    const lateVar = totalLateByTeam.reduce((s, c) => s + (c - lateMean) ** 2, 0) / totalLateByTeam.length;
+    score += lateVar * 1000;
+
+    // 1b. Max late surplus (aligns optimizer with the user-visible flag condition)
+    const divFloor = Math.min(...totalLateByTeam);
+    const maxSurplus = Math.max(...totalLateByTeam.map(c => c - divFloor));
+    score += maxSurplus * 250;
+
+    // 1c. Per-individual-late-slot variance (SECONDARY — prevents concentration on latest slot).
+    //     Use scheduledDivTeams; an unscheduled team would pull the mean toward 0 spuriously.
+    for (const timeSlot of lateTimeSlots) {
+      const counts = scheduledDivTeams.map(t => teamStats[t.id].gamesByTimeSlot[timeSlot] || 0);
+      const slotMean = counts.reduce((s, c) => s + c, 0) / counts.length;
+      const slotVar = counts.reduce((s, c) => s + (c - slotMean) ** 2, 0) / counts.length;
+      score += slotVar * 100;
+    }
   }
 
   // 2. Weekend variance

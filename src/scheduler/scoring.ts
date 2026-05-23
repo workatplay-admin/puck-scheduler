@@ -16,11 +16,18 @@ const daysBetween = (a: string, b: string): number => {
  * Global weighted-penalty scoring function for a candidate schedule (ADR §5.3.1).
  *
  * Penalties applied (lower = better, 0 = ideal):
- * - Late-slot variance per distinct late time, ×1000
+ * - Total late-game count variance per team (per division), ×1000 — primary signal
+ * - Max Late Surplus (per division), ×250 — aligns optimizer with the user-visible flag
+ * - Per-individual-late-slot variance, ×100 — secondary, prevents concentration
  * - Weekend-game variance across teams, ×100
  * - Consecutive-week same-opponent pairings, ×50 each
  * - Rest-day violations (< 2 days between games), ×25 each
  * - `maxGamesPerWeek` excess games per team-week, ×10000 each
+ *
+ * Population alignment: all three late-slot terms are computed over scheduled
+ * teams (teams in the division that appear in ≥1 assignment) — the same population
+ * the report uses for its floor calculation. This keeps the optimizer's objective
+ * and the report's flag condition pointed at the same quantity.
  */
 export const score: ScoreFn = (assignments, slotsById, settings) => {
   let total = 0;
@@ -71,18 +78,37 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
     const divTeamIds = [...new Set(divA.flatMap(a => [a.homeTeamId, a.awayTeamId]))];
     if (divTeamIds.length === 0) continue;
 
-    // Late-slot variance ×1000
     const lateSlots = [...new Set(
       divA
         .map(a => slotsById[a.slotId] as IceSlot | undefined)
         .filter((s): s is IceSlot => !!s && isDerivedLate(s, settings.lateGameThreshold))
         .map(s => s.startTime)
     )];
+
+    // Total late-game count variance per team ×1000 (primary fairness signal).
+    const totalLateByTeam = divTeamIds.map(id => {
+      const lm = teamLateGames.get(id);
+      if (!lm) return 0;
+      let sum = 0;
+      for (const c of lm.values()) sum += c;
+      return sum;
+    });
+    const lateMean = totalLateByTeam.reduce((s, c) => s + c, 0) / totalLateByTeam.length;
+    const lateVar = totalLateByTeam.reduce((s, c) => s + (c - lateMean) ** 2, 0) / totalLateByTeam.length;
+    total += lateVar * 1000;
+
+    // Max Late Surplus ×250 — directly penalizes the worst single-team gap above the floor,
+    // aligning the optimizer with the report's flag condition.
+    const divFloor = Math.min(...totalLateByTeam);
+    const maxSurplus = Math.max(...totalLateByTeam.map(c => c - divFloor));
+    total += maxSurplus * 250;
+
+    // Per-individual-late-slot variance ×100 (secondary — prevents concentration on the latest slot).
     for (const lateSlot of lateSlots) {
       const counts = divTeamIds.map(id => teamLateGames.get(id)?.get(lateSlot) ?? 0);
       const mean = counts.reduce((s, c) => s + c, 0) / counts.length;
       const variance = counts.reduce((s, c) => s + (c - mean) ** 2, 0) / counts.length;
-      total += variance * 1000;
+      total += variance * 100;
     }
 
     // Weekend variance ×100
