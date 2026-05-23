@@ -235,7 +235,7 @@ export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }:
         <Button variant="outline" onClick={onBack}>
           Back
         </Button>
-        <Button onClick={onGenerate} disabled={!canGenerate}>
+        <Button onClick={() => onGenerate()} disabled={!canGenerate}>
           Generate Schedule
         </Button>
       </div>

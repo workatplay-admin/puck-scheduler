@@ -57,13 +57,31 @@ const Index = () => {
   }, []);
 
   const handleGenerateSchedule = useCallback((seed?: number) => {
+    // Defensive: React onClick handlers pass an event as the first arg. If a
+    // caller mistakenly wires `onClick={handleGenerateSchedule}` instead of
+    // `onClick={() => handleGenerateSchedule()}`, that event lands in `seed`
+    // and PointerEvents fail structured-clone in postMessage. Drop anything
+    // that isn't a finite number.
+    const safeSeed = typeof seed === 'number' && Number.isFinite(seed) ? seed : undefined;
+
     workerRef.current?.terminate();
 
     setIsGenerating(true);
     setGenProgress(null);
     setGenError(null);
 
-    const worker = new SchedulerWorker() as Worker;
+    let worker: Worker;
+    try {
+      worker = new SchedulerWorker() as Worker;
+    } catch (err) {
+      console.error('Worker constructor threw:', err);
+      setGenError({
+        code: 'unhandled_exception',
+        message: err instanceof Error ? err.message : 'Could not start schedule worker.',
+      });
+      setIsGenerating(false);
+      return;
+    }
     workerRef.current = worker;
 
     worker.onmessage = (e: MessageEvent<WorkerMsg>) => {
@@ -89,15 +107,31 @@ const Index = () => {
       }
     };
 
-    worker.onerror = () => {
-      setGenError({ code: 'unhandled_exception', message: 'Schedule generation failed. Please try again.' });
+    worker.onerror = (e) => {
+      console.error('Worker error:', e.message, e.filename, e.lineno, e.error);
+      setGenError({ code: 'unhandled_exception', message: e.message || 'Schedule generation failed.' });
       setIsGenerating(false);
       setGenProgress(null);
       workerRef.current = null;
     };
+    worker.onmessageerror = (e) => {
+      console.error('Worker messageerror:', e);
+    };
 
-    const init: WorkerInit = { slots: store.iceSlots, teams: store.teams, settings: store.settings, seed };
-    worker.postMessage(init);
+    const init: WorkerInit = { slots: store.iceSlots, teams: store.teams, settings: store.settings, seed: safeSeed };
+    try {
+      worker.postMessage(init);
+    } catch (err) {
+      console.error('Worker postMessage threw:', err);
+      worker.terminate();
+      workerRef.current = null;
+      setGenError({
+        code: 'unhandled_exception',
+        message: err instanceof Error ? err.message : 'Could not send data to worker.',
+      });
+      setIsGenerating(false);
+      setGenProgress(null);
+    }
   }, [store]);
 
   const handleUseScheduleAnyway = useCallback(() => {

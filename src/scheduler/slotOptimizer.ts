@@ -79,6 +79,8 @@ export const assignSlots = (
   let bestScore = currentScore;
   let T = T0;
 
+  onProgress?.(0, currentScore, bestScore);
+
   for (let iter = 0; iter < iterations; iter++) {
     // Select a division that has ≥2 games
     const aOk = divAIdx.length >= 2;
