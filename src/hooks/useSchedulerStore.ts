@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { SchedulerState, IceSlot, Team, Game, Schedule, SchedulerSettings, FairnessReport, DEFAULT_SETTINGS } from '@/types/scheduler';
 import { calculateFairnessReport } from '@/scheduler';
 import { scheduleWrite, flushPending, cancelPending } from '@/lib/debouncedStorage';
+import { generateId } from '@/lib/generateId';
 
 const STORAGE_SLOTS_KEY = 'hockey_slots';
 const STORAGE_TEAMS_KEY = 'hockey_teams';
@@ -181,7 +182,7 @@ export const useSchedulerStore = () => {
       if (!prev.schedule) return prev;
 
       const newGame: Game = {
-        id: `reassign-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        id: generateId(),
         homeTeamId,
         awayTeamId,
         division,
