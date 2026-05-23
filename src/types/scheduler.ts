@@ -3,8 +3,6 @@ export interface IceSlot {
   date: string;
   startTime: string;
   dayOfWeek: string;
-  isLate: boolean;
-  isWeekend: boolean;
 }
 
 export interface Team {
@@ -15,15 +13,19 @@ export interface Team {
 
 export interface Game {
   id: string;
-  date: string;
-  dayOfWeek: string;
-  startTime: string;
   division: 'A' | 'B';
-  homeTeam: string;
-  awayTeam: string;
-  isLate: boolean;
-  isWeekend: boolean;
+  homeTeamId: string;
+  awayTeamId: string;
   slotId: string;
+}
+
+export interface Schedule {
+  games: Game[];
+  seed: number;
+  generatedAt: string;
+  fairnessScore: number;
+  hasInvariantViolations?: boolean;
+  violationSummary?: string;
 }
 
 export interface SchedulerSettings {
@@ -69,10 +71,12 @@ export interface FairnessReport {
 export interface SchedulerState {
   iceSlots: IceSlot[];
   teams: Team[];
-  schedule: Game[];
+  schedule: Schedule | null;
   unusedSlots: IceSlot[];
   settings: SchedulerSettings;
   currentTab: number;
+  fairnessReport: FairnessReport | null;
+  fairnessReportUpdated: boolean;
 }
 
 export const DEFAULT_SETTINGS: SchedulerSettings = {
@@ -81,3 +85,19 @@ export const DEFAULT_SETTINGS: SchedulerSettings = {
   weekendVarianceFlag: 3,
   maxGamesPerWeek: 3,
 };
+
+/** Builds a lookup map from slot id → IceSlot for O(1) access. */
+export const buildSlotsById = (slots: IceSlot[]): Record<string, IceSlot> =>
+  Object.fromEntries(slots.map(s => [s.id, s]));
+
+/** Builds a lookup map from team id → Team for O(1) access. */
+export const buildTeamsById = (teams: Team[]): Record<string, Team> =>
+  Object.fromEntries(teams.map(t => [t.id, t]));
+
+/** Returns true if the slot's start time is at or after the configured late-game threshold. */
+export const isDerivedLate = (slot: IceSlot, threshold: string): boolean =>
+  slot.startTime >= threshold;
+
+/** Returns true if the slot falls on a Friday or Saturday. */
+export const isDerivedWeekend = (slot: IceSlot): boolean =>
+  slot.dayOfWeek === 'Friday' || slot.dayOfWeek === 'Saturday';

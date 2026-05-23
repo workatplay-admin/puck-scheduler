@@ -11,9 +11,11 @@ interface FairnessReportProps {
   report: FairnessReport;
   settings: SchedulerSettings;
   onRecalculate: () => void;
+  isUpdated?: boolean;
+  onDismissUpdated?: () => void;
 }
 
-export const FairnessReportSection = ({ report, settings, onRecalculate }: FairnessReportProps) => {
+export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdated, onDismissUpdated }: FairnessReportProps) => {
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['games', 'late', 'weekend']));
 
   const toggleSection = (section: string) => {
@@ -37,6 +39,14 @@ export const FairnessReportSection = ({ report, settings, onRecalculate }: Fairn
             <CardTitle className="flex items-center gap-2">
               <Check className="w-5 h-5 text-success" />
               Fairness Report
+              {isUpdated && (
+                <button
+                  onClick={onDismissUpdated}
+                  className="text-xs bg-accent text-accent-foreground px-2 py-0.5 rounded-full hover:opacity-80 font-normal"
+                >
+                  Updated
+                </button>
+              )}
             </CardTitle>
             <Button variant="outline" size="sm" onClick={onRecalculate}>
               <RefreshCw className="w-4 h-4 mr-2" />
