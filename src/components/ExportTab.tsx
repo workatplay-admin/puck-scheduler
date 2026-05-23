@@ -2,21 +2,25 @@ import { Download, FileCheck, AlertTriangle, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Game, FairnessReport } from '@/types/scheduler';
+import { Schedule, FairnessReport, IceSlot } from '@/types/scheduler';
 import { formatDate } from '@/lib/csvParser';
 
 interface ExportTabProps {
-  schedule: Game[];
+  schedule: Schedule;
+  slotsById: Record<string, IceSlot>;
   fairnessReport: FairnessReport | null;
   onExport: () => void;
   onBack: () => void;
 }
 
-export const ExportTab = ({ schedule, fairnessReport, onExport, onBack }: ExportTabProps) => {
-  const divisionAGames = schedule.filter(g => g.division === 'A').length;
-  const divisionBGames = schedule.filter(g => g.division === 'B').length;
-  const dateRange = schedule.length > 0
-    ? `${formatDate(schedule[0].date)} - ${formatDate(schedule[schedule.length - 1].date)}`
+export const ExportTab = ({ schedule, slotsById, fairnessReport, onExport, onBack }: ExportTabProps) => {
+  const divisionAGames = schedule.games.filter(g => g.division === 'A').length;
+  const divisionBGames = schedule.games.filter(g => g.division === 'B').length;
+  const allDates = [...new Set(
+    schedule.games.map(g => slotsById[g.slotId]?.date).filter((d): d is string => !!d)
+  )].sort();
+  const dateRange = allDates.length > 0
+    ? `${formatDate(allDates[0])} - ${formatDate(allDates[allDates.length - 1])}`
     : '';
 
   const flaggedTeams = fairnessReport?.teamStats.filter(t => t.lateSlotFlagged || t.weekendFlagged) || [];
@@ -34,7 +38,7 @@ export const ExportTab = ({ schedule, fairnessReport, onExport, onBack }: Export
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center p-4 bg-background rounded-lg">
-              <p className="text-3xl font-bold text-accent">{schedule.length}</p>
+              <p className="text-3xl font-bold text-accent">{schedule.games.length}</p>
               <p className="text-sm text-muted-foreground">Total Games</p>
             </div>
             <div className="text-center p-4 bg-background rounded-lg">

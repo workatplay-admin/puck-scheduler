@@ -1,17 +1,19 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Calendar, Users, FileSpreadsheet, Download, Trash2 } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { useSchedulerStore } from '@/hooks/useSchedulerStore';
 import { IceTimesTab } from '@/components/IceTimesTab';
 import { TeamsTab } from '@/components/TeamsTab';
 import { ScheduleTab } from '@/components/ScheduleTab';
 import { ExportTab } from '@/components/ExportTab';
 import { SettingsPanel } from '@/components/SettingsPanel';
-import { generateSchedule, calculateFairnessReport } from '@/lib/scheduleGenerator';
 import { generateExportCSV, downloadCSV } from '@/lib/csvExport';
-import { FairnessReport } from '@/types/scheduler';
+import { Schedule, IceSlot, buildSlotsById, buildTeamsById } from '@/types/scheduler';
+import type { WorkerMsg, WorkerInit } from '@/scheduler/workerTypes';
+import SchedulerWorker from '@/scheduler/worker?worker';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +25,15 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+const SA_TOTAL_ITERS = 50_000;
+
+interface GenError {
+  code: 'invariant_failed' | 'unhandled_exception';
+  message: string;
+  lastBestSchedule?: Schedule;
+  unusedSlots?: IceSlot[];
+}
+
 const TABS = [
   { id: 0, label: 'Ice Times', icon: FileSpreadsheet },
   { id: 1, label: 'Teams', icon: Users },
@@ -32,67 +43,94 @@ const TABS = [
 
 const Index = () => {
   const store = useSchedulerStore();
-  const [fairnessReport, setFairnessReport] = useState<FairnessReport | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [genProgress, setGenProgress] = useState<{ pct: number; bestScore: number } | null>(null);
+  const [genError, setGenError] = useState<GenError | null>(null);
+  const workerRef = useRef<Worker | null>(null);
 
-  const handleGenerateSchedule = useCallback(() => {
+  const slotsById = useMemo(() => buildSlotsById(store.iceSlots), [store.iceSlots]);
+  const teamsById = useMemo(() => buildTeamsById(store.teams), [store.teams]);
+
+  useEffect(() => {
+    return () => { workerRef.current?.terminate(); };
+  }, []);
+
+  const handleGenerateSchedule = useCallback((seed?: number) => {
+    workerRef.current?.terminate();
+
     setIsGenerating(true);
-    
-    // Use setTimeout to allow UI to update
-    setTimeout(() => {
-      try {
-        const { schedule, unusedSlots } = generateSchedule(
-          store.iceSlots,
-          store.teams,
-          store.settings
-        );
-        
-        store.setSchedule(schedule, unusedSlots);
-        
-        const report = calculateFairnessReport(schedule, store.teams, store.settings);
-        setFairnessReport(report);
-        
+    setGenProgress(null);
+    setGenError(null);
+
+    const worker = new SchedulerWorker() as Worker;
+    workerRef.current = worker;
+
+    worker.onmessage = (e: MessageEvent<WorkerMsg>) => {
+      const msg = e.data;
+
+      if (msg.type === 'progress') {
+        setGenProgress({
+          pct: Math.min(100, Math.round((msg.iteration / SA_TOTAL_ITERS) * 100)),
+          bestScore: msg.bestScore,
+        });
+      } else if (msg.type === 'done') {
+        store.setSchedule(msg.schedule, msg.unusedSlots);
         store.setCurrentTab(2);
-        toast.success(`Schedule generated with ${schedule.length} games!`);
-      } catch (error) {
-        toast.error('Failed to generate schedule. Please check your inputs.');
-        console.error(error);
-      } finally {
+        toast.success(`Schedule generated with ${msg.schedule.games.length} games!`);
         setIsGenerating(false);
+        setGenProgress(null);
+        workerRef.current = null;
+      } else {
+        setGenError({ code: msg.code, message: msg.message, lastBestSchedule: msg.lastBestSchedule, unusedSlots: msg.unusedSlots });
+        setIsGenerating(false);
+        setGenProgress(null);
+        workerRef.current = null;
       }
-    }, 100);
+    };
+
+    worker.onerror = () => {
+      setGenError({ code: 'unhandled_exception', message: 'Schedule generation failed. Please try again.' });
+      setIsGenerating(false);
+      setGenProgress(null);
+      workerRef.current = null;
+    };
+
+    const init: WorkerInit = { slots: store.iceSlots, teams: store.teams, settings: store.settings, seed };
+    worker.postMessage(init);
   }, [store]);
 
+  const handleUseScheduleAnyway = useCallback(() => {
+    if (genError?.lastBestSchedule) {
+      store.setSchedule(genError.lastBestSchedule, genError.unusedSlots ?? []);
+      store.setCurrentTab(2);
+      toast.warning('Schedule has balance issues — review the fairness report before exporting.');
+    }
+    setGenError(null);
+  }, [genError, store]);
+
   const handleRecalculateReport = useCallback(() => {
-    const report = calculateFairnessReport(store.schedule, store.teams, store.settings);
-    setFairnessReport(report);
+    store.recalculateFairnessReport();
     toast.success('Fairness report recalculated');
-  }, [store.schedule, store.teams, store.settings]);
+  }, [store]);
 
   const handleExport = useCallback(() => {
-    if (!fairnessReport) {
-      const report = calculateFairnessReport(store.schedule, store.teams, store.settings);
-      setFairnessReport(report);
-    }
-    
-    const csv = generateExportCSV(store.schedule, fairnessReport || calculateFairnessReport(store.schedule, store.teams, store.settings));
+    if (!store.schedule || !store.fairnessReport) return;
+    const csv = generateExportCSV(store.schedule, store.fairnessReport, slotsById, teamsById);
     const filename = `hockey_schedule_${new Date().toISOString().split('T')[0]}.csv`;
     downloadCSV(csv, filename);
     toast.success('Schedule exported successfully!');
-  }, [store.schedule, store.teams, store.settings, fairnessReport]);
+  }, [store.schedule, store.fairnessReport, slotsById, teamsById]);
 
   const handleClearAll = useCallback(() => {
     store.clearAll();
-    setFairnessReport(null);
     setShowClearConfirm(false);
     toast.success('All data cleared');
   }, [store]);
 
-  // Determine which tabs are accessible
   const canAccessTeams = store.iceSlots.length > 0;
-  const canAccessSchedule = store.schedule.length > 0;
-  const canAccessExport = store.schedule.length > 0;
+  const canAccessSchedule = store.schedule !== null && store.schedule.games.length > 0;
+  const canAccessExport = store.schedule !== null && store.schedule.games.length > 0;
 
   const getTabState = (tabId: number) => {
     if (tabId === 0) return 'available';
@@ -174,11 +212,12 @@ const Index = () => {
           <IceTimesTab
             iceSlots={store.iceSlots}
             settings={store.settings}
+            teams={store.teams}
             onSlotsChange={store.setIceSlots}
             onNext={() => store.setCurrentTab(1)}
           />
         )}
-        
+
         {store.currentTab === 1 && (
           <TeamsTab
             teams={store.teams}
@@ -188,39 +227,76 @@ const Index = () => {
             onGenerate={handleGenerateSchedule}
           />
         )}
-        
-        {store.currentTab === 2 && (
+
+        {store.currentTab === 2 && store.schedule && (
           <ScheduleTab
             schedule={store.schedule}
+            slotsById={slotsById}
+            teamsById={teamsById}
             teams={store.teams}
             unusedSlots={store.unusedSlots}
             settings={store.settings}
-            fairnessReport={fairnessReport}
+            fairnessReport={store.fairnessReport}
+            fairnessReportUpdated={store.fairnessReportUpdated}
             onRegenerate={handleGenerateSchedule}
+            onReproduce={() => handleGenerateSchedule(store.schedule?.seed)}
             onSwapGames={store.swapGames}
             onRemoveGame={store.removeGame}
+            onReassignSlot={store.reassignSlot}
             onRecalculateReport={handleRecalculateReport}
+            onDismissUpdated={store.clearFairnessReportUpdated}
             onBack={() => store.setCurrentTab(1)}
             onExport={() => store.setCurrentTab(3)}
           />
         )}
-        
-        {store.currentTab === 3 && (
+
+        {store.currentTab === 3 && store.schedule && (
           <ExportTab
             schedule={store.schedule}
-            fairnessReport={fairnessReport}
+            slotsById={slotsById}
+            fairnessReport={store.fairnessReport}
             onExport={handleExport}
             onBack={() => store.setCurrentTab(2)}
           />
         )}
 
-        {/* Loading Overlay */}
-        {isGenerating && (
+        {/* Generation Overlay — progress or error */}
+        {(isGenerating || genError) && (
           <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-50">
-            <div className="text-center">
-              <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-lg font-medium">Generating schedule...</p>
-              <p className="text-sm text-muted-foreground">Optimizing for fairness</p>
+            <div className="bg-card border rounded-xl p-8 shadow-lg w-full max-w-sm text-center space-y-4">
+              {isGenerating && (
+                <>
+                  <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-lg font-medium">Generating schedule...</p>
+                  {genProgress ? (
+                    <>
+                      <Progress value={genProgress.pct} className="h-2" />
+                      <p className="text-sm text-muted-foreground">
+                        {genProgress.pct}% · best score {genProgress.bestScore.toLocaleString()}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Optimizing for fairness</p>
+                  )}
+                </>
+              )}
+              {genError && (
+                <>
+                  <p className="text-lg font-medium text-destructive">
+                    {genError.code === 'invariant_failed' ? 'Schedule balance warning' : 'Generation failed'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">{genError.message}</p>
+                  <div className="flex flex-col gap-2">
+                    {genError.code === 'invariant_failed' && genError.lastBestSchedule && (
+                      <Button onClick={handleUseScheduleAnyway}>Use this schedule anyway</Button>
+                    )}
+                    {genError.code === 'unhandled_exception' && (
+                      <Button onClick={() => { setGenError(null); handleGenerateSchedule(); }}>Retry</Button>
+                    )}
+                    <Button variant="outline" onClick={() => setGenError(null)}>Cancel</Button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
