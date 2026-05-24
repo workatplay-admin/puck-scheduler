@@ -1,63 +1,85 @@
 import { useCallback, useState } from 'react';
-import { Upload, FileSpreadsheet, AlertCircle, Check, Clock } from 'lucide-react';
+import { Upload, FileSpreadsheet, AlertCircle, Check, Clock, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { parseCSV, formatTime, formatDate } from '@/lib/csvParser';
-import { IceSlot, SchedulerSettings } from '@/types/scheduler';
+import { formatTime, formatDate } from '@/lib/csvParser';
+import { parseIceSlotsCSV } from '@/parsers/csvParser';
+import { parseIceSlotsExcel } from '@/parsers/excelParser';
+import { assignDays } from '@/scheduler/dayAssignment';
+import { IceSlot, SchedulerSettings, isDerivedLate, isDerivedWeekend } from '@/types/scheduler';
+import type { Team } from '@/types/scheduler';
 
 interface IceTimesTabProps {
   iceSlots: IceSlot[];
   settings: SchedulerSettings;
+  teams?: Team[];
   onSlotsChange: (slots: IceSlot[]) => void;
   onNext: () => void;
 }
 
-export const IceTimesTab = ({ iceSlots, settings, onSlotsChange, onNext }: IceTimesTabProps) => {
+export const IceTimesTab = ({ iceSlots, settings, teams = [], onSlotsChange, onNext }: IceTimesTabProps) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [errors, setErrors] = useState<string[]>([]);
+  const [wholeFileError, setWholeFileError] = useState<string | null>(null);
+  const [rejectedRows, setRejectedRows] = useState<{ row: number; reason: string }[]>([]);
+  const [showRejected, setShowRejected] = useState(false);
 
   const handleFile = useCallback(async (file: File) => {
-    const text = await file.text();
-    const { slots, errors: parseErrors } = parseCSV(text, settings.lateGameThreshold);
-    
-    setErrors(parseErrors);
-    if (slots.length > 0) {
-      onSlotsChange(slots);
+    setWholeFileError(null);
+    setRejectedRows([]);
+    setShowRejected(false);
+
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const result = ext === 'xlsx' || ext === 'xls'
+      ? await parseIceSlotsExcel(file)
+      : await parseIceSlotsCSV(file);
+
+    if (result.wholeFileError) {
+      setWholeFileError(result.wholeFileError);
+      return;
     }
-  }, [settings.lateGameThreshold, onSlotsChange]);
+
+    setRejectedRows(result.rejected);
+    if (result.valid.length > 0) {
+      onSlotsChange(result.valid);
+    }
+  }, [onSlotsChange]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    
     const file = e.dataTransfer.files[0];
-    if (file && (file.name.endsWith('.csv') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
-      handleFile(file);
-    } else {
-      setErrors(['Please upload a CSV file']);
-    }
-  }, [handleFile]);
-
-  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
     if (file) {
       handleFile(file);
     }
   }, [handleFile]);
 
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+  }, [handleFile]);
+
   const handleClear = () => {
     onSlotsChange([]);
-    setErrors([]);
+    setWholeFileError(null);
+    setRejectedRows([]);
   };
 
-  // Calculate stats
   const uniqueDates = [...new Set(iceSlots.map(s => s.date))];
-  const lateSlots = iceSlots.filter(s => s.isLate).length;
-  const weekendSlots = iceSlots.filter(s => s.isWeekend).length;
-  const dateRange = uniqueDates.length > 0 
+  const lateSlots = iceSlots.filter(s => isDerivedLate(s, settings.lateGameThreshold)).length;
+  const weekendSlots = iceSlots.filter(s => isDerivedWeekend(s)).length;
+  const dateRange = uniqueDates.length > 0
     ? `${formatDate(uniqueDates[0])} - ${formatDate(uniqueDates[uniqueDates.length - 1])}`
     : '';
+
+  // Feasibility check (DAV-52): run assignDays dry-run when both slots and teams are present
+  let feasibilityWarning: string | null = null;
+  if (iceSlots.length > 0 && teams.length >= 2) {
+    const { feasibility } = assignDays(iceSlots, teams, settings, Math.random);
+    if (!feasibility.ok) {
+      feasibilityWarning = feasibility.reason;
+    }
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -69,11 +91,12 @@ export const IceTimesTab = ({ iceSlots, settings, onSlotsChange, onNext }: IceTi
             Upload Ice Times
           </CardTitle>
           <CardDescription>
-            Upload a CSV file with Date and Start Time columns
+            Upload a CSV or Excel file with Date and Start Time columns
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div
+            aria-label="Upload CSV or Excel file"
             className={`upload-zone cursor-pointer ${isDragging ? 'upload-zone-active' : ''}`}
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
@@ -90,15 +113,15 @@ export const IceTimesTab = ({ iceSlots, settings, onSlotsChange, onNext }: IceTi
             <div className="flex flex-col items-center gap-3 text-muted-foreground">
               <Upload className="w-10 h-10" />
               <div className="text-center">
-                <p className="font-medium text-foreground">Drop your file here or click to browse</p>
-                <p className="text-sm mt-1">Accepts CSV files with Date and Start Time columns</p>
+                <p className="font-medium text-foreground">Drop your CSV or Excel file here or click to browse</p>
+                <p className="text-sm mt-1">Accepts CSV or Excel files with Date and Start Time columns</p>
               </div>
             </div>
           </div>
 
           {/* Expected Format */}
           <div className="mt-4 p-4 bg-muted/50 rounded-lg">
-            <p className="text-sm font-medium mb-2">Expected CSV Format:</p>
+            <p className="text-sm font-medium mb-2">Expected Format (CSV or Excel):</p>
             <code className="text-xs font-mono bg-background p-2 rounded block">
               Date,Start Time<br/>
               2025-01-15,17:00<br/>
@@ -109,17 +132,48 @@ export const IceTimesTab = ({ iceSlots, settings, onSlotsChange, onNext }: IceTi
         </CardContent>
       </Card>
 
-      {/* Errors */}
-      {errors.length > 0 && (
+      {/* Whole-file error */}
+      {wholeFileError && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{wholeFileError}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Per-row rejections expander */}
+      {rejectedRows.length > 0 && !wholeFileError && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            <ul className="list-disc list-inside">
-              {errors.slice(0, 5).map((err, i) => (
-                <li key={i}>{err}</li>
-              ))}
-              {errors.length > 5 && <li>...and {errors.length - 5} more errors</li>}
-            </ul>
+            <div className="flex items-center justify-between">
+              <span>{rejectedRows.length} row{rejectedRows.length !== 1 ? 's' : ''} could not be imported.</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowRejected(v => !v)}
+                className="h-6 px-2"
+              >
+                {showRejected ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {showRejected ? 'Hide' : 'View details'}
+              </Button>
+            </div>
+            {showRejected && (
+              <ul className="mt-2 list-disc list-inside text-sm space-y-1">
+                {rejectedRows.map((r) => (
+                  <li key={r.row}>Row {r.row}: {r.reason}</li>
+                ))}
+              </ul>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Feasibility warning (DAV-52) */}
+      {feasibilityWarning && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Slot balance warning:</strong> {feasibilityWarning} You can still generate, but the schedule may need more retries.
           </AlertDescription>
         </Alert>
       )}
@@ -185,13 +239,13 @@ export const IceTimesTab = ({ iceSlots, settings, onSlotsChange, onNext }: IceTi
                       <td className="font-mono tabular-nums">{formatTime(slot.startTime)}</td>
                       <td>
                         <div className="flex gap-2">
-                          {slot.isLate && (
+                          {isDerivedLate(slot, settings.lateGameThreshold) && (
                             <span className="badge-late">
                               <Clock className="w-3 h-3" />
                               Late
                             </span>
                           )}
-                          {slot.isWeekend && (
+                          {isDerivedWeekend(slot) && (
                             <span className="badge-weekend">Weekend</span>
                           )}
                         </div>

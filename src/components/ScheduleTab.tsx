@@ -1,33 +1,34 @@
 import { useState, useMemo } from 'react';
-import { Calendar, Clock, RefreshCw, Filter, ArrowUpDown, Trash2, ArrowLeftRight } from 'lucide-react';
+import { Calendar, Clock, RefreshCw, RotateCcw, Filter, ArrowUpDown, ArrowUp, ArrowDown, Trash2, ArrowLeftRight, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Game, Team, IceSlot, SchedulerSettings, FairnessReport } from '@/types/scheduler';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Schedule, Team, IceSlot, SchedulerSettings, FairnessReport,
+  isDerivedLate, isDerivedWeekend,
+} from '@/types/scheduler';
 import { formatDate, formatTime } from '@/lib/csvParser';
 import { FairnessReportSection } from './FairnessReport';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ScheduleTabDialogs } from './ScheduleTabDialogs';
+import { UnusedSlotsSection } from './UnusedSlotsSection';
 
 interface ScheduleTabProps {
-  schedule: Game[];
+  schedule: Schedule;
+  slotsById: Record<string, IceSlot>;
+  teamsById: Record<string, Team>;
   teams: Team[];
   unusedSlots: IceSlot[];
   settings: SchedulerSettings;
   fairnessReport: FairnessReport | null;
   onRegenerate: () => void;
+  onReproduce: () => void;
   onSwapGames: (gameId1: string, gameId2: string) => void;
   onRemoveGame: (gameId: string) => void;
+  onReassignSlot: (slotId: string, homeTeamId: string, awayTeamId: string, division: 'A' | 'B') => void;
   onRecalculateReport: () => void;
+  onDismissUpdated: () => void;
+  fairnessReportUpdated: boolean;
   onBack: () => void;
   onExport: () => void;
 }
@@ -36,14 +37,20 @@ type SortField = 'date' | 'time' | 'division' | 'homeTeam';
 
 export const ScheduleTab = ({
   schedule,
+  slotsById,
+  teamsById,
   teams,
   unusedSlots,
   settings,
   fairnessReport,
   onRegenerate,
+  onReproduce,
   onSwapGames,
   onRemoveGame,
+  onReassignSlot,
   onRecalculateReport,
+  onDismissUpdated,
+  fairnessReportUpdated,
   onBack,
   onExport,
 }: ScheduleTabProps) => {
@@ -55,45 +62,88 @@ export const ScheduleTab = ({
   const [editMode, setEditMode] = useState(false);
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  const [showReproduceConfirm, setShowReproduceConfirm] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState<string | null>(null);
 
-  // Filter and sort games
-  const filteredGames = useMemo(() => {
-    let games = [...schedule];
+  const qualityLabel = (s: number) => {
+    if (s < 5_000) return { label: 'Excellent', cls: 'text-success' };
+    if (s < 15_000) return { label: 'Good', cls: 'text-warning' };
+    return { label: 'Needs review', cls: 'text-destructive' };
+  };
 
-    // Apply filters
+  const slotIsLate = (slotId: string) => {
+    const slot = slotsById[slotId];
+    return slot ? isDerivedLate(slot, settings.lateGameThreshold) : false;
+  };
+
+  const slotIsWeekend = (slotId: string) => {
+    const slot = slotsById[slotId];
+    return slot ? isDerivedWeekend(slot) : false;
+  };
+
+  const uniqueDays = useMemo(
+    () => [...new Set(schedule.games.map(g => slotsById[g.slotId]?.dayOfWeek).filter((d): d is string => !!d))],
+    [schedule.games, slotsById]
+  );
+
+  const allDates = useMemo(
+    () => [...new Set(schedule.games.map(g => slotsById[g.slotId]?.date).filter((d): d is string => !!d))].sort(),
+    [schedule.games, slotsById]
+  );
+  const dateRange = allDates.length > 0
+    ? `${formatDate(allDates[0])} - ${formatDate(allDates[allDates.length - 1])}`
+    : '';
+
+  const filteredGames = useMemo(() => {
+    let games = [...schedule.games];
+
     if (divisionFilter !== 'all') {
       games = games.filter(g => g.division === divisionFilter);
     }
     if (teamFilter !== 'all') {
-      games = games.filter(g => g.homeTeam === teamFilter || g.awayTeam === teamFilter);
+      games = games.filter(g =>
+        teamsById[g.homeTeamId]?.name === teamFilter ||
+        teamsById[g.awayTeamId]?.name === teamFilter
+      );
     }
     if (dayFilter !== 'all') {
-      games = games.filter(g => g.dayOfWeek === dayFilter);
+      games = games.filter(g => slotsById[g.slotId]?.dayOfWeek === dayFilter);
     }
 
-    // Apply sort
     games.sort((a, b) => {
+      const slotA = slotsById[a.slotId];
+      const slotB = slotsById[b.slotId];
       let cmp = 0;
       switch (sortField) {
         case 'date':
-          cmp = a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime);
+          cmp = (slotA?.date ?? '').localeCompare(slotB?.date ?? '')
+             || (slotA?.startTime ?? '').localeCompare(slotB?.startTime ?? '');
           break;
         case 'time':
-          cmp = a.startTime.localeCompare(b.startTime);
+          cmp = (slotA?.startTime ?? '').localeCompare(slotB?.startTime ?? '');
           break;
         case 'division':
           cmp = a.division.localeCompare(b.division);
           break;
         case 'homeTeam':
-          cmp = a.homeTeam.localeCompare(b.homeTeam);
+          cmp = (teamsById[a.homeTeamId]?.name ?? '').localeCompare(teamsById[b.homeTeamId]?.name ?? '');
           break;
       }
       return sortAsc ? cmp : -cmp;
     });
 
     return games;
-  }, [schedule, divisionFilter, teamFilter, dayFilter, sortField, sortAsc]);
+  }, [schedule.games, slotsById, teamsById, divisionFilter, teamFilter, dayFilter, sortField, sortAsc]);
+
+  const sortIcon = (field: SortField) => {
+    if (sortField !== field) return <ArrowUpDown className="w-3 h-3" />;
+    return sortAsc ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />;
+  };
+
+  const ariaSortAttr = (field: SortField): 'ascending' | 'descending' | 'none' => {
+    if (sortField !== field) return 'none';
+    return sortAsc ? 'ascending' : 'descending';
+  };
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -106,27 +156,21 @@ export const ScheduleTab = ({
 
   const handleGameClick = (gameId: string) => {
     if (!editMode) return;
-    
+
     if (selectedGame === null) {
       setSelectedGame(gameId);
     } else if (selectedGame === gameId) {
       setSelectedGame(null);
     } else {
-      // Check if both games are from the same division
-      const game1 = schedule.find(g => g.id === selectedGame);
-      const game2 = schedule.find(g => g.id === gameId);
-      
+      const game1 = schedule.games.find(g => g.id === selectedGame);
+      const game2 = schedule.games.find(g => g.id === gameId);
+
       if (game1 && game2 && game1.division === game2.division) {
         onSwapGames(selectedGame, gameId);
       }
       setSelectedGame(null);
     }
   };
-
-  const uniqueDays = [...new Set(schedule.map(g => g.dayOfWeek))];
-  const dateRange = schedule.length > 0
-    ? `${formatDate(schedule[0].date)} - ${formatDate(schedule[schedule.length - 1].date)}`
-    : '';
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -137,8 +181,28 @@ export const ScheduleTab = ({
             <div>
               <h3 className="text-lg font-semibold">Schedule Generated</h3>
               <p className="text-sm text-muted-foreground">
-                {schedule.length} games • {dateRange}
+                {schedule.games.length} games • {dateRange}
               </p>
+              {schedule.fairnessScore > 0 && (() => {
+                const q = qualityLabel(schedule.fairnessScore);
+                return (
+                  <TooltipProvider>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`text-sm font-medium ${q.cls}`}>{q.label}</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-3 h-3 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs">Fairness score: {schedule.fairnessScore.toLocaleString()}<br />Excellent &lt; 5,000 · Good &lt; 15,000 · Needs review ≥ 15,000</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <span className="text-xs text-muted-foreground">({schedule.fairnessScore.toLocaleString()})</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">Schedule ID: {schedule.seed}</p>
+                  </TooltipProvider>
+                );
+              })()}
             </div>
             <div className="flex gap-2">
               <Button
@@ -151,14 +215,36 @@ export const ScheduleTab = ({
               >
                 {editMode ? 'Done Editing' : 'Edit Mode'}
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowRegenerateConfirm(true)}
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Regenerate
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowReproduceConfirm(true)}
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Reproduce
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Recreate this exact schedule using the same Schedule ID</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowRegenerateConfirm(true)}
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Regenerate
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Discard and generate a new schedule</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         </CardContent>
@@ -241,30 +327,34 @@ export const ScheduleTab = ({
             <table className="data-table">
               <thead>
                 <tr>
-                  <th className="cursor-pointer" onClick={() => handleSort('date')}>
-                    <span className="flex items-center gap-1">
-                      Date
-                      <ArrowUpDown className="w-3 h-3" />
-                    </span>
+                  <th className="cursor-pointer" role="button" tabIndex={0}
+                    aria-sort={ariaSortAttr('date')}
+                    onClick={() => handleSort('date')}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSort('date'); } }}
+                  >
+                    <span className="flex items-center gap-1">Date{sortIcon('date')}</span>
                   </th>
                   <th>Day</th>
-                  <th className="cursor-pointer" onClick={() => handleSort('time')}>
-                    <span className="flex items-center gap-1">
-                      Time
-                      <ArrowUpDown className="w-3 h-3" />
-                    </span>
+                  <th className="cursor-pointer" role="button" tabIndex={0}
+                    aria-sort={ariaSortAttr('time')}
+                    onClick={() => handleSort('time')}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSort('time'); } }}
+                  >
+                    <span className="flex items-center gap-1">Time{sortIcon('time')}</span>
                   </th>
-                  <th className="cursor-pointer" onClick={() => handleSort('division')}>
-                    <span className="flex items-center gap-1">
-                      Div
-                      <ArrowUpDown className="w-3 h-3" />
-                    </span>
+                  <th className="cursor-pointer" role="button" tabIndex={0}
+                    aria-sort={ariaSortAttr('division')}
+                    onClick={() => handleSort('division')}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSort('division'); } }}
+                  >
+                    <span className="flex items-center gap-1">Div{sortIcon('division')}</span>
                   </th>
-                  <th className="cursor-pointer" onClick={() => handleSort('homeTeam')}>
-                    <span className="flex items-center gap-1">
-                      Home
-                      <ArrowUpDown className="w-3 h-3" />
-                    </span>
+                  <th className="cursor-pointer" role="button" tabIndex={0}
+                    aria-sort={ariaSortAttr('homeTeam')}
+                    onClick={() => handleSort('homeTeam')}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSort('homeTeam'); } }}
+                  >
+                    <span className="flex items-center gap-1">Home{sortIcon('homeTeam')}</span>
                   </th>
                   <th>Away</th>
                   <th>Flags</th>
@@ -272,70 +362,75 @@ export const ScheduleTab = ({
                 </tr>
               </thead>
               <tbody>
-                {filteredGames.slice(0, 100).map((game) => (
-                  <tr
-                    key={game.id}
-                    className={`${editMode ? 'cursor-pointer' : ''} ${selectedGame === game.id ? 'bg-accent/20' : ''}`}
-                    onClick={() => handleGameClick(game.id)}
-                  >
-                    <td className="font-mono tabular-nums">{formatDate(game.date)}</td>
-                    <td>{game.dayOfWeek.slice(0, 3)}</td>
-                    <td className="font-mono tabular-nums">{formatTime(game.startTime)}</td>
-                    <td>
-                      <span className={game.division === 'A' ? 'badge-division-a' : 'badge-division-b'}>
-                        {game.division}
-                      </span>
-                    </td>
-                    <td className="font-medium">{game.homeTeam}</td>
-                    <td>{game.awayTeam}</td>
-                    <td>
-                      <div className="flex gap-1">
-                        {game.isLate && (
-                          <span className="badge-late">
-                            <Clock className="w-3 h-3" />
-                          </span>
-                        )}
-                        {game.isWeekend && (
-                          <span className="badge-weekend">Wknd</span>
-                        )}
-                      </div>
-                    </td>
-                    {editMode && (
+                {filteredGames.slice(0, 100).map((game) => {
+                  const slot = slotsById[game.slotId];
+                  const homeName = teamsById[game.homeTeamId]?.name ?? '';
+                  const awayName = teamsById[game.awayTeamId]?.name ?? '';
+                  return (
+                    <tr
+                      key={game.id}
+                      className={`${editMode ? 'cursor-pointer' : ''} ${selectedGame === game.id ? 'bg-accent/20' : ''}`}
+                      onClick={() => handleGameClick(game.id)}
+                    >
+                      <td className="font-mono tabular-nums">{slot ? formatDate(slot.date) : '—'}</td>
+                      <td>{slot?.dayOfWeek.slice(0, 3) ?? '—'}</td>
+                      <td className="font-mono tabular-nums">{slot ? formatTime(slot.startTime) : '—'}</td>
+                      <td>
+                        <span className={game.division === 'A' ? 'badge-division-a' : 'badge-division-b'}>
+                          {game.division}
+                        </span>
+                      </td>
+                      <td className="font-medium">{homeName}</td>
+                      <td>{awayName}</td>
                       <td>
                         <div className="flex gap-1">
-                          {selectedGame && selectedGame !== game.id && (
+                          {slotIsLate(game.slotId) && (
+                            <span className="badge-late">
+                              <Clock className="w-3 h-3" />
+                            </span>
+                          )}
+                          {slotIsWeekend(game.slotId) && (
+                            <span className="badge-weekend">Wknd</span>
+                          )}
+                        </div>
+                      </td>
+                      {editMode && (
+                        <td>
+                          <div className="flex gap-1">
+                            {selectedGame && selectedGame !== game.id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const game1 = schedule.games.find(g => g.id === selectedGame);
+                                  if (game1?.division === game.division) {
+                                    onSwapGames(selectedGame, game.id);
+                                    setSelectedGame(null);
+                                  }
+                                }}
+                              >
+                                <ArrowLeftRight className="w-4 h-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 w-7 p-0"
+                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const game1 = schedule.find(g => g.id === selectedGame);
-                                if (game1?.division === game.division) {
-                                  onSwapGames(selectedGame, game.id);
-                                  setSelectedGame(null);
-                                }
+                                setShowRemoveConfirm(game.id);
                               }}
                             >
-                              <ArrowLeftRight className="w-4 h-4" />
+                              <Trash2 className="w-4 h-4" />
                             </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowRemoveConfirm(game.id);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -349,27 +444,13 @@ export const ScheduleTab = ({
 
       {/* Unused Slots */}
       {unusedSlots.length > 0 && (
-        <Card className="border-warning/30">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm text-warning">
-              Unused Slots ({unusedSlots.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {unusedSlots.slice(0, 10).map(slot => (
-                <Badge key={slot.id} variant="outline" className="text-xs">
-                  {formatDate(slot.date)} @ {formatTime(slot.startTime)}
-                </Badge>
-              ))}
-              {unusedSlots.length > 10 && (
-                <Badge variant="outline" className="text-xs">
-                  +{unusedSlots.length - 10} more
-                </Badge>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <UnusedSlotsSection
+          unusedSlots={unusedSlots}
+          schedule={schedule}
+          slotsById={slotsById}
+          teams={teams}
+          onReassignSlot={onReassignSlot}
+        />
       )}
 
       {/* Fairness Report */}
@@ -378,6 +459,8 @@ export const ScheduleTab = ({
           report={fairnessReport}
           settings={settings}
           onRecalculate={onRecalculateReport}
+          isUpdated={fairnessReportUpdated}
+          onDismissUpdated={onDismissUpdated}
         />
       )}
 
@@ -391,50 +474,18 @@ export const ScheduleTab = ({
         </Button>
       </div>
 
-      {/* Regenerate Confirmation Dialog */}
-      <AlertDialog open={showRegenerateConfirm} onOpenChange={setShowRegenerateConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Regenerate Schedule?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will discard all manual edits and generate a new schedule.
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => {
-              onRegenerate();
-              setShowRegenerateConfirm(false);
-            }}>
-              Regenerate
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Remove Game Confirmation Dialog */}
-      <AlertDialog open={!!showRemoveConfirm} onOpenChange={() => setShowRemoveConfirm(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove Game?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will remove the game and mark the ice slot as unused.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => {
-              if (showRemoveConfirm) {
-                onRemoveGame(showRemoveConfirm);
-                setShowRemoveConfirm(null);
-              }
-            }}>
-              Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ScheduleTabDialogs
+        seed={schedule.seed}
+        showRegenerateConfirm={showRegenerateConfirm}
+        showReproduceConfirm={showReproduceConfirm}
+        showRemoveConfirm={showRemoveConfirm}
+        onRegenerateConfirm={() => { onRegenerate(); setShowRegenerateConfirm(false); }}
+        onReproduceConfirm={() => { onReproduce(); setShowReproduceConfirm(false); }}
+        onRemoveConfirm={(id) => { onRemoveGame(id); setShowRemoveConfirm(null); }}
+        onRegenerateCancel={() => setShowRegenerateConfirm(false)}
+        onReproduceCancel={() => setShowReproduceConfirm(false)}
+        onRemoveCancel={() => setShowRemoveConfirm(null)}
+      />
     </div>
   );
 };

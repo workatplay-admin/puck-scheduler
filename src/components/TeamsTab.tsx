@@ -5,6 +5,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Team } from '@/types/scheduler';
 
 interface TeamsTabProps {
@@ -18,6 +28,7 @@ interface TeamsTabProps {
 export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }: TeamsTabProps) => {
   const [teamName, setTeamName] = useState('');
   const [division, setDivision] = useState<'A' | 'B'>('A');
+  const [duplicateTeam, setDuplicateTeam] = useState<string | null>(null);
 
   const divisionATeams = teams.filter(t => t.division === 'A');
   const divisionBTeams = teams.filter(t => t.division === 'B');
@@ -25,19 +36,24 @@ export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }:
   const canGenerate = divisionATeams.length >= 2 || divisionBTeams.length >= 2;
 
   const handleAddTeam = () => {
-    if (!teamName.trim()) return;
-    
-    const newTeam: Team = {
+    const trimmed = teamName.trim();
+    if (!trimmed) return;
+
+    const isDuplicate = teams.some(t => t.name.toLowerCase() === trimmed.toLowerCase());
+    if (isDuplicate) {
+      setDuplicateTeam(trimmed);
+      return;
+    }
+
+    onAddTeam({
       id: `team-${Date.now()}`,
-      name: teamName.trim(),
+      name: trimmed,
       division,
-    };
-    
-    onAddTeam(newTeam);
+    });
     setTeamName('');
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleAddTeam();
     }
@@ -65,7 +81,7 @@ export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }:
                 placeholder="e.g., Ice Hawks"
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
-                onKeyPress={handleKeyPress}
+                onKeyDown={handleKeyDown}
                 className="mt-1.5"
               />
             </div>
@@ -219,10 +235,29 @@ export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }:
         <Button variant="outline" onClick={onBack}>
           Back
         </Button>
-        <Button onClick={onGenerate} disabled={!canGenerate}>
+        <Button onClick={() => onGenerate()} disabled={!canGenerate}>
           Generate Schedule
         </Button>
       </div>
+
+      {/* Duplicate Name Dialog */}
+      <AlertDialog open={duplicateTeam !== null} onOpenChange={() => setDuplicateTeam(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Team Name Already Exists</AlertDialogTitle>
+            <AlertDialogDescription>
+              A team named &quot;{duplicateTeam}&quot; already exists. Each team must have a unique name.
+              Please choose a different name.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setDuplicateTeam(null)}>
+              OK
+            </AlertDialogAction>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
