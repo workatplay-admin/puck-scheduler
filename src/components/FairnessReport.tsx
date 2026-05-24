@@ -447,8 +447,8 @@ export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdat
                   </tr>
                   <tr>
                     <td>Games Per Team</td>
-                    <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'A')?.gamesPerTeam || 0}</td>
-                    <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'B')?.gamesPerTeam || 0}</td>
+                    <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'A')?.gamesPerTeam ?? '0'}</td>
+                    <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'B')?.gamesPerTeam ?? '0'}</td>
                   </tr>
                   <tr>
                     <td>Friday Game Days</td>

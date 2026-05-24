@@ -59,7 +59,12 @@ export interface DivisionBalance {
   division: 'A' | 'B';
   teamCount: number;
   totalGames: number;
-  gamesPerTeam: number;
+  /**
+   * Games each team plays in this division. Rendered as a single integer when
+   * every team plays the same count, or `"min–max"` when the count varies
+   * (which happens when total games is not divisible by teamCount/2).
+   */
+  gamesPerTeam: string;
   fridayGameDays: number;
   saturdayGameDays: number;
   totalLateSlots: number;

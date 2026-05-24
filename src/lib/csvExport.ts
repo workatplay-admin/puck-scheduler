@@ -136,7 +136,7 @@ export const generateExportCSV = (
 
   lines.push(['Teams', divA?.teamCount || 0, divB?.teamCount || 0].join(','));
   lines.push(['Total Games', divA?.totalGames || 0, divB?.totalGames || 0].join(','));
-  lines.push(['Games Per Team', divA?.gamesPerTeam || 0, divB?.gamesPerTeam || 0].join(','));
+  lines.push(['Games Per Team', divA?.gamesPerTeam ?? '0', divB?.gamesPerTeam ?? '0'].join(','));
   lines.push(['Friday Game Days', divA?.fridayGameDays || 0, divB?.fridayGameDays || 0].join(','));
   lines.push(['Saturday Game Days', divA?.saturdayGameDays || 0, divB?.saturdayGameDays || 0].join(','));
   lines.push(['Total Late Slots', divA?.totalLateSlots || 0, divB?.totalLateSlots || 0].join(','));

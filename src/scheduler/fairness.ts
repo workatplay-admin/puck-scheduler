@@ -181,16 +181,19 @@ export const calculateFairnessReport = (
       return slot ? isDerivedLate(slot, settings.lateGameThreshold) : false;
     }).length;
 
-    const totalTeamGames = divisionTeams.reduce(
-      (sum, t) => sum + (teamStatsMap.get(t.name)?.totalGames || 0),
-      0
-    );
+    const perTeamCounts = divisionTeams.map(t => teamStatsMap.get(t.name)?.totalGames ?? 0);
+    let gamesPerTeam = '0';
+    if (perTeamCounts.length > 0) {
+      const minGames = Math.min(...perTeamCounts);
+      const maxGames = Math.max(...perTeamCounts);
+      gamesPerTeam = minGames === maxGames ? String(minGames) : `${minGames}–${maxGames}`;
+    }
 
     divisionBalance.push({
       division,
       teamCount: divisionTeams.length,
       totalGames: divisionGames.length,
-      gamesPerTeam: divisionTeams.length > 0 ? Math.round(totalTeamGames / divisionTeams.length) : 0,
+      gamesPerTeam,
       fridayGameDays: fridayDays,
       saturdayGameDays: saturdayDays,
       totalLateSlots: lateSlotCount,
