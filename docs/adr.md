@@ -97,8 +97,8 @@ interface Schedule {
 ```ts
 interface Settings {
   lateGameThreshold: string;   // '20:45' (8:45pm)
-  lateSlotVarianceFlag: number; // Flag if variance >= this (default: 2)
-  weekendVarianceFlag: number;  // Flag if variance >= this (default: 3)
+  lateSlotVarianceFlag: number; // Flag if Late Surplus > this (default: 2). Field name kept for storage compatibility.
+  weekendVarianceFlag: number;  // Flag if weekend-game count exceeds the division minimum by more than this (default: 3)
   maxGamesPerWeek: number;      // Hard cap (default: 3)
 }
 ```
@@ -212,50 +212,79 @@ function assignDaysToDivisions(
 
 ## **5.2 Phase 2: Matchup Generation**
 
-Generate all required matchups for each division. With N teams and G games per team:
+Generate exactly `slotsNeeded` matchups per division, with per-pair frequency
+balanced **by construction**. With N teams in a division, P = C(N, 2) unordered
+pairs, and S slots available:
 
-* Total games in division = (N × G) / 2
+* base       = ⌊S / P⌋
+* remainder  = S − base · P
+* Every pair plays `base` games; `remainder` pairs play one extra game (base + 1)
+* Per-pair spread ≤ 1 is guaranteed (every pair plays `base` or `base + 1`)
+* Per-team game-count spread ≤ 1 follows from greedy bonus distribution
+* This satisfies the post-run pairing-balance invariant (±1 per pair, per division)
 
-* Each pairing plays G / (N-1) times, ±1
-
-* Use round-robin repeated as needed
+Orientation (home vs. away) is irrelevant at this phase — Phase 4
+(`assignHomeAway`) rewrites it globally based on home-game counts.
 
 **Pseudo-code:**
 
 ```text
-function generateMatchups(teams: Team[], totalSlots: number): Matchup[] {
+function buildBalancedPool(teams: Team[], slotsNeeded: number, rng: () => number): Matchup[] {
   const n = teams.length;
-  const gamesNeeded = totalSlots; // One game per slot assigned to this division
+  if (n < 2 || slotsNeeded === 0) return [];
 
-  // Generate all possible pairings
-  const pairings: [Team, Team][] = [];
+  // 1. Enumerate every unordered pair.
+  const pairs: [Team, Team][] = [];
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      pairings.push([teams[i], teams[j]]);
+      pairs.push([teams[i], teams[j]]);
     }
   }
+  const P = pairs.length; // = C(n, 2)
 
-  // Repeat round-robin until we have enough games
-  const matchups: Matchup[] = [];
-  let pairingCounts = new Map<string, number>(); // Track how many times each pairing used
+  // 2. Base allocation: every pair plays `base` games.
+  const base = Math.floor(slotsNeeded / P);
+  const remainder = slotsNeeded - base * P;
+  const pairCount = new Array(P).fill(base);
+  const teamCount = new Map<string, number>();
+  for (const t of teams) teamCount.set(t.id, base * (n - 1));
 
-  while (matchups.length < gamesNeeded) {
-    // Find pairing with lowest count
-    const nextPairing = pairings.reduce((min, p) => {
-      const key = pairingKey(p);
-      const count = pairingCounts.get(key) || 0;
-      const minCount = pairingCounts.get(pairingKey(min)) || 0;
-      return count < minCount ? p : min;
-    });
-
-    matchups.push({ team1: nextPairing[0], team2: nextPairing[1] });
-    pairingCounts.set(pairingKey(nextPairing),
-      (pairingCounts.get(pairingKey(nextPairing)) || 0) + 1);
+  // 3. Distribute `remainder` bonus games greedily — at each step pick the
+  //    candidate pair whose two teams currently have the lowest combined
+  //    total. Iterate in a seeded-shuffled order so ties are broken
+  //    reproducibly. A pair can be bonused at most once (cap at base + 1).
+  const order = shuffleWith(range(P), rng);
+  for (let r = 0; r < remainder; r++) {
+    let bestIdx = -1, bestSum = Infinity;
+    for (const i of order) {
+      if (pairCount[i] > base) continue; // already bonused
+      const [a, b] = pairs[i];
+      const sum = teamCount.get(a.id) + teamCount.get(b.id);
+      if (sum < bestSum) { bestSum = sum; bestIdx = i; }
+    }
+    pairCount[bestIdx]++;
+    teamCount.set(pairs[bestIdx][0].id, teamCount.get(pairs[bestIdx][0].id) + 1);
+    teamCount.set(pairs[bestIdx][1].id, teamCount.get(pairs[bestIdx][1].id) + 1);
   }
 
-  return matchups;
+  // 4. Emit the pool. Orientation is irrelevant (assignHomeAway rewrites it
+  //    downstream); shuffle so consumers don't see runs of the same pair.
+  const pool: Matchup[] = [];
+  for (let i = 0; i < P; i++) {
+    const [a, b] = pairs[i];
+    for (let g = 0; g < pairCount[i]; g++) pool.push({ team1: a, team2: b });
+  }
+  return shuffleWith(pool, rng);
 }
 ```
+
+**Why not a trim-based approach?** An earlier implementation built a pool of
+`⌈S / (2 · P)⌉` full round-robin rounds and trimmed surplus pairs greedily on
+per-team game count. With S not divisible by `2 · P` (e.g. 62 slots over 6 teams,
+P=15), the trimmer would drop multiple entries from the same pair while leaving
+others untouched, producing per-pair spread up to 3 — which then violated the
+post-run invariant. Constructing the pool from `base + remainder` removes that
+failure mode entirely.
 
 ## **5.3 Phase 3: Slot Assignment (The Hard Part)**
 
