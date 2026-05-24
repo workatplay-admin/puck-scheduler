@@ -64,7 +64,7 @@ export const SettingsPanel = ({ settings, onUpdateSettings }: SettingsPanelProps
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">Late Slot Variance Flag</CardTitle>
               <CardDescription className="text-xs">
-                Flag a team if they have this many more games than another team at any specific late time slot
+                Flag a team if they play this many more late-slot games in total than the team with the fewest in their division
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -11,9 +11,11 @@ interface FairnessReportProps {
   report: FairnessReport;
   settings: SchedulerSettings;
   onRecalculate: () => void;
+  isUpdated?: boolean;
+  onDismissUpdated?: () => void;
 }
 
-export const FairnessReportSection = ({ report, settings, onRecalculate }: FairnessReportProps) => {
+export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdated, onDismissUpdated }: FairnessReportProps) => {
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['games', 'late', 'weekend']));
 
   const toggleSection = (section: string) => {
@@ -37,6 +39,14 @@ export const FairnessReportSection = ({ report, settings, onRecalculate }: Fairn
             <CardTitle className="flex items-center gap-2">
               <Check className="w-5 h-5 text-success" />
               Fairness Report
+              {isUpdated && (
+                <button
+                  onClick={onDismissUpdated}
+                  className="text-xs bg-accent text-accent-foreground px-2 py-0.5 rounded-full hover:opacity-80 font-normal"
+                >
+                  Updated
+                </button>
+              )}
             </CardTitle>
             <Button variant="outline" size="sm" onClick={onRecalculate}>
               <RefreshCw className="w-4 h-4 mr-2" />
@@ -177,6 +187,9 @@ export const FairnessReportSection = ({ report, settings, onRecalculate }: Fairn
                 </span>
                 <ChevronDown className={`w-4 h-4 transition-transform ${openSections.has('late') ? 'rotate-180' : ''}`} />
               </CardTitle>
+              <p className="text-xs text-muted-foreground text-left mt-1">
+                Total late games per team, compared against the division minimum.
+              </p>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -186,8 +199,8 @@ export const FairnessReportSection = ({ report, settings, onRecalculate }: Fairn
                   <tr>
                     <th>Team</th>
                     <th>Division</th>
-                    <th>Worst Variance</th>
-                    <th>Slot</th>
+                    <th className="text-right">Total Late</th>
+                    <th className="text-right">Late Surplus</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -200,8 +213,8 @@ export const FairnessReportSection = ({ report, settings, onRecalculate }: Fairn
                           {stat.division}
                         </span>
                       </td>
-                      <td className="font-mono tabular-nums">+{stat.worstVariance}</td>
-                      <td>{stat.worstVarianceSlot ? formatTime(stat.worstVarianceSlot) : 'N/A'}</td>
+                      <td className="text-right font-mono tabular-nums">{stat.totalLateGames}</td>
+                      <td className="text-right font-mono tabular-nums">+{stat.lateSurplus}</td>
                       <td>
                         <span className={stat.lateSlotFlagged ? 'badge-flagged' : 'badge-ok'}>
                           {stat.lateSlotFlagged ? '⚠ FLAG' : '✓ OK'}
