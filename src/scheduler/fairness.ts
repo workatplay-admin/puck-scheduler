@@ -109,7 +109,7 @@ export const calculateFairnessReport = (
     // Late Surplus per team: aggregate late-game counts, compare against the
     // floor computed over scheduled teams only. A team with zero games is excluded
     // from the floor calculation so it can't artificially inflate every other
-    // team's surplus (see late-fairness-redefinition.md §Metric). The unscheduled
+    // team's surplus (see docs/archive/late-fairness-redefinition.md §Metric). The unscheduled
     // team still appears in the report with totalLateGames=0, lateSurplus=0, and
     // is never flagged. Floor population may shift between regenerations if the
     // roster changes — this is intentional; the floor reflects the schedule that

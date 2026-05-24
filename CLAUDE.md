@@ -36,8 +36,9 @@ src/
                     fairness.ts      — calculateFairnessReport
   types/          scheduler.ts — domain types
 docs/
-  adr             Architecture decision record (single file)
-  prd             Product requirements document (single file)
+  adr.md          Architecture decision record (canonical)
+  prd.md          Product requirements document (canonical)
+  archive/        Completed migration plans, governance reviews, superseded specs
 ```
 
 Core scheduling logic is in `src/scheduler/` (entry: `src/scheduler/index.ts`). CSV import/export in `src/lib/csvParser.ts` and `src/lib/csvExport.ts`.

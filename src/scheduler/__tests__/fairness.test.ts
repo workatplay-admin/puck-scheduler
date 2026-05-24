@@ -148,7 +148,7 @@ describe('fairness — concentration guard (level 1, scoring)', () => {
 
     expect(sc).toBeGreaterThan(sd);
     // If this assertion ever fails, the per-slot multiplier is too small — bump
-    // ×100 → ×200 in scoring.ts. See late-fairness-redefinition.md §Scoring.
+    // ×100 → ×200 in scoring.ts. See docs/archive/late-fairness-redefinition.md §Scoring.
   });
 });
 
@@ -280,7 +280,7 @@ describe('fairness — edge cases', () => {
 describe('fairness — skewed-floor case', () => {
   it('one outlier with very few late games still produces correct surpluses for the rest', () => {
     // A1=2 (outlier floor), A2=10, A3=10, A4=11 → surpluses 0, 8, 8, 9.
-    // Demonstrates the trade-off documented in late-fairness-redefinition.md:
+    // Demonstrates the trade-off documented in docs/archive/late-fairness-redefinition.md:
     // an outlier scheduled team makes everyone else's surplus look larger,
     // but the integer is still answering the user's actual question.
     const teams: Team[] = [
@@ -321,7 +321,7 @@ describe('fairness — skewed-floor case', () => {
     expect(findStat(report, 'A4').totalLateGames).toBe(11);
 
     // Floor=2; every other team's surplus is large because the outlier dragged
-    // the floor down. Intentional — see late-fairness-redefinition.md §Metric.
+    // the floor down. Intentional — see docs/archive/late-fairness-redefinition.md §Metric.
     expect(findStat(report, 'A1').lateSurplus).toBe(0);
     expect(findStat(report, 'A2').lateSurplus).toBe(7);
     expect(findStat(report, 'A3').lateSurplus).toBe(8);

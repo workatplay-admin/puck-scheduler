@@ -1,7 +1,7 @@
 # Late-slot fairness: introduce per-team Late Surplus
 
-**Status:** Planned — superseded once implementation lands and PRD §3.2.3 / ADR §5.3.1 reflect the change.
-**Related:** [PRD §3.2.3](./prd.md#323-fairness-optimization), [ADR §5.3.1](./adr.md#531-fairness-scoring-function), [SettingsPanel UI](../src/components/SettingsPanel.tsx)
+**Status:** Archived (2026-05-24) — implementation landed in commit `45291ed`; PRD §3.2.3 and ADR §5.3.1 reflect the change.
+**Related:** [PRD §3.2.3](../prd.md#323-fairness-optimization), [ADR §5.3.1](../adr.md#531-fairness-scoring-function), [SettingsPanel UI](../../src/components/SettingsPanel.tsx)
 
 ## Review Summary
 
