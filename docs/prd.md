@@ -12,7 +12,7 @@
 
 ## **1.1 Problem Statement**
 
-Scheduling a beer league hockey season with 300-320 games across two divisions is time-consuming and error-prone when done manually. The most contentious issue is fairness—teams complain when they're stuck with more late-night games or undesirable weekend slots than other teams. Currently, there's no simple tool that automatically generates a fair schedule while respecting the constraint that only one division plays on any given day.
+Scheduling a beer league hockey season with 300-320 games across two divisions is time-consuming and error-prone when done manually. The most contentious issue is fairness—teams complain when they're stuck with more late-night games or undesirable weekend slots than other teams. Currently, there's no simple tool that automatically generates a fair schedule while distributing undesirable ice fairly.
 
 ## **1.2 Solution**
 
@@ -41,8 +41,11 @@ A single league commissioner with no coding experience but solid understanding o
 | Division | A group of teams that only play against each other (no cross-division play) |
 | Ice Slot | A specific date and start time when one game can be played |
 | Late Game | Any game starting at the configured threshold time or later (default: 8:45pm) |
-| Undesirable Day | Friday or Saturday (at any time) |
-| Game Day | A calendar date; all ice slots on a given date are assigned to one division |
+| Undesirable Day | Friday or Saturday (at any time). May not occur at all — many seasons contain no Friday/Saturday ice, in which case this dimension is inert. |
+| Game Day | A calendar date on which games are played. Since v0.6 a date may be shared by both divisions (see *Slot Block*). |
+| Slot Block | A contiguous run of ice slots on one date assigned to a single division. A date with few enough slots forms a single block; a date large enough to force same-day double-headers is split into two contiguous blocks, one per division. |
+| Desirability Band | One of three tiers a slot falls into by start time: **afternoon** (before the prime window), **prime** (most desirable), or **late** (at/after the late-game threshold). Configurable in Settings. |
+| Same-Day Game | A second (or third) game for the same team on one calendar date. **Never permitted** — an invariant, not a configurable option. |
 | Fairness | Even distribution of late ice slots and undesirable days across teams |
 
 # **3. Functional Requirements**
@@ -80,15 +83,15 @@ A single league commissioner with no coding experience but solid understanding o
 
 ## **3.2 Schedule Generation**
 
-### **3.2.1 Division-to-Day Assignment**
+### **3.2.1 Division-to-Slot-Block Assignment**
 
-The algorithm must first assign each game day (calendar date) to exactly one division.
+The algorithm must first assign every ice slot to exactly one division, in contiguous per-date blocks. Most dates are assigned whole; a date is split between the two divisions only when keeping it whole would force teams to play twice in one day.
 
 **Rules:**
 
-1. All ice slots on a given date belong to the same division
+1. **Slot blocks.** Ice slots on a date are assigned in *contiguous blocks*, each block to one division. A date is kept whole where possible; it is split into two contiguous blocks only when a whole-date assignment would force teams into same-day games (i.e. `2 × slots > division team count`). Both divisions may therefore play on the same date, but each plays a consecutive run of slots so teams in a division still overlap at the rink afterwards — the socialisation purpose this rule exists to serve.
 2. Alternate divisions where practical (A, B, A, B...) but deviations are acceptable
-3. Cross-division balance: Division A and Division B should have approximately equal distribution of Friday game days, Saturday game days, and late ice slots
+3. **Cross-division balance is limited to slot count.** Divisions should receive an equal number of ice slots (hence equal games per team). Cross-division balance of *late* or *prime* slots is explicitly **not** a goal: there is no cross-division play in either the regular season or the playoffs, so no team is ever compared against a team in the other division. Fairness comparisons are within-division only
 4. **Proportional date allocation.** Dates are assigned to divisions so that each division's total slot count is proportional to its team count, targeting `target_slots[div] ≈ team_count[div] × total_slots / total_teams`. This is what makes the global games-per-team ±1 guarantee in §3.2.2 achievable. Rounding errors are absorbed into the ±1 tolerance.
 
 ### **3.2.2 Game Count Balancing**
@@ -116,18 +119,32 @@ The algorithm must first assign each game day (calendar date) to exactly one div
 * The per-time grid is still shown in the Time Slot Distribution table for reference
 * Not tracked for fairness: Distribution of early/prime slots (5:00pm, 6:30pm, 7:45pm, etc.) is shown for reference but not graded
 
-**2. Undesirable day distribution (Friday and Saturday)**
+**2. Same-day games**
+
+* A team must never play more than one game on the same calendar date
+* Enforced structurally (slot blocks, §3.2.1 rule 1) and reinforced by a heavy optimizer penalty
+* Not configurable — there is no circumstance in which the league wants same-day games
+* Every ice slot must be used — an empty slot is wasted ice. This never conflicts with the no-same-day rule in practice: ice is booked against the league's own capacity, so a date never carries more slots than the two divisions can host. Where a *roster* is misconfigured badly enough to break that (e.g. one division left with a single team), the importer warns before generation rather than producing a compromised schedule
+
+**3. Desirability band distribution (prime vs afternoon)**
+
+* Slots fall into three bands by start time: afternoon, prime, and late (§2, *Desirability Band*)
+* Each team's **total** prime games and **total** afternoon games are balanced against its divisionmates — per-band totals, not per-individual-time-slot
+* Best-effort, and always weighted below late-slot fairness: where the two conflict, late fairness wins
+* Defaults reflect a typical senior men's season — afternoon before 5:45pm, prime 5:45pm until the late threshold — and are configurable
+
+**4. Undesirable day distribution (Friday and Saturday)**
 
 * Count Friday and Saturday games per team
 * Minimize imbalance across teams within each division
 * Cross-division: Division A's Friday/Saturday game count should be roughly proportional to Division B's
 
-**3. Opponent variety**
+**5. Opponent variety**
 
 * Avoid scheduling the same two teams against each other in consecutive weeks
 * Spread matchups throughout the season where possible
 
-**4. Rest days**
+**6. Rest days**
 
 * Target: 2 games per team per week
 * Hard constraint: No more than max games per week (configurable, default 3) in any 7-day rolling window
@@ -137,7 +154,7 @@ The algorithm must first assign each game day (calendar date) to exactly one div
 
 Given the scale (~150 games per division) and constraints, the algorithm should:
 
-**Phase 1 - Day Assignment:** Assign each calendar date to a division. Use alternating pattern as baseline. Adjust to balance Friday/Saturday/late-slot counts between divisions.
+**Phase 1 - Slot-Block Assignment:** Assign every ice slot to a division in contiguous per-date blocks. Most dates go whole to one division; a date is split between divisions only where keeping it whole would force teams to play twice in one day. Balance total slot count between divisions.
 
 **Phase 2 - Matchup Generation:** Generate required matchups per division (round-robin, repeated as needed). Ensure each pairing count is balanced (±1).
 
@@ -278,6 +295,7 @@ A simple settings panel accessible from the main interface, allowing the commiss
 | Late slot variance flag | Flag a team if they play this many more late-slot games in total than the team with the fewest in their division | 2 | 1–5 |
 | Weekend variance flag | Flag a team if they have this many more Friday/Saturday games than another team | 3 | 1–10 |
 | Max games per week | Hard cap on games per team in any 7-day window | 3 | 2–5 |
+| Prime window start | Start time of the most-desirable band. Slots earlier than this are "afternoon"; slots from here until the late threshold are "prime". Must be earlier than the late-game threshold | 5:45pm | Any time before the late threshold |
 
 ### **3.7.2 Settings Behavior**
 
