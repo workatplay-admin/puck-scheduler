@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FairnessReport, SchedulerSettings } from '@/types/scheduler';
-import { formatTime } from '@/lib/csvParser';
+import { formatDate, formatTime } from '@/lib/csvParser';
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
@@ -307,6 +307,7 @@ export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdat
                       <th className="text-center text-purple-500">Fri</th>
                       <th className="text-center text-purple-500">Sat</th>
                       <th className="text-center">Sun</th>
+                      <th className="text-center">2+ same day</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -320,6 +321,19 @@ export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdat
                         <td className="text-center font-mono tabular-nums text-purple-500">{stat.dayOfWeekGames['Friday'] || 0}</td>
                         <td className="text-center font-mono tabular-nums text-purple-500">{stat.dayOfWeekGames['Saturday'] || 0}</td>
                         <td className="text-center font-mono tabular-nums">{stat.dayOfWeekGames['Sunday'] || 0}</td>
+                        <td className="text-center font-mono tabular-nums">
+                          {stat.sameDayDates.length > 0 ? (
+                            <span
+                              className="badge-late"
+                              title={`Plays twice on: ${stat.sameDayDates.map(formatDate).join(', ')}`}
+                            >
+                              <AlertTriangle className="w-3 h-3" />
+                              {stat.sameDayDates.length}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

@@ -2,6 +2,13 @@ import { isDerivedLate, isDerivedWeekend } from '@/types/scheduler';
 import type { IceSlot } from '@/types/scheduler';
 import type { GameAssignment, ScoreFn } from './types';
 
+/**
+ * Cost of one extra game for the same team on the same date. Above every soft term but
+ * below the 10000 `maxGamesPerWeek` hard constraint: playing twice in a day is never
+ * acceptable, but it must not outrank the weekly cap.
+ */
+const SAME_DAY_PENALTY = 5000;
+
 const weekOf = (dateStr: string): number => {
   const [y, m, d] = dateStr.split('-').map(Number);
   return Math.floor(Date.UTC(y, m - 1, d) / (7 * 86400000));
@@ -22,6 +29,7 @@ const daysBetween = (a: string, b: string): number => {
  * - Weekend-game variance across teams, ×100
  * - Consecutive-week same-opponent pairings, ×50 each
  * - Rest-day violations (< 2 days between games), ×25 each
+ * - Extra same-day games per team, ×5000 each — never permitted (PRD §3.2.3)
  * - `maxGamesPerWeek` excess games per team-week, ×10000 each
  *
  * Population alignment: all three late-slot terms are computed over scheduled
@@ -38,6 +46,7 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
   const teamWeekendGames = new Map<string, number>();
   const teamWeeklyGames = new Map<string, Map<number, number>>();
   const teamGameDates = new Map<string, string[]>();
+  const teamDateCounts = new Map<string, Map<string, number>>();
   const teamOppByWeek = new Map<string, Map<number, string[]>>();
 
   for (const id of teamIds) {
@@ -45,6 +54,7 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
     teamWeekendGames.set(id, 0);
     teamWeeklyGames.set(id, new Map());
     teamGameDates.set(id, []);
+    teamDateCounts.set(id, new Map());
     teamOppByWeek.set(id, new Map());
   }
 
@@ -64,6 +74,8 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
       const wm = teamWeeklyGames.get(teamId)!;
       wm.set(week, (wm.get(week) ?? 0) + 1);
       teamGameDates.get(teamId)!.push(slot.date);
+      const dc = teamDateCounts.get(teamId)!;
+      dc.set(slot.date, (dc.get(slot.date) ?? 0) + 1);
       const owm = teamOppByWeek.get(teamId)!;
       const opps = owm.get(week) ?? [];
       opps.push(oppId);
@@ -136,6 +148,14 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
     const dates = [...teamGameDates.get(teamId)!].sort();
     for (let i = 1; i < dates.length; i++) {
       if (daysBetween(dates[i - 1], dates[i]) < 2) total += 25;
+    }
+  }
+
+  // Same-day games ×5000 per extra game. A triple-header therefore costs twice a
+  // double-header, which is right: it is twice as bad.
+  for (const teamId of teamIds) {
+    for (const [, count] of teamDateCounts.get(teamId)!) {
+      if (count > 1) total += (count - 1) * SAME_DAY_PENALTY;
     }
   }
 

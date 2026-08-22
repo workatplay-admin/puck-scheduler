@@ -125,7 +125,10 @@ describe('capacity overflow (only reachable via a misconfigured roster)', () => 
   it('warns rather than forcing a same-day game', () => {
     const { feasibility } = assignDays(overflowSlots, teams, DEFAULT_SETTINGS, Math.random);
     expect(feasibility.ok).toBe(false);
-    expect(feasibility.reason).toMatch(/don't split evenly/i);
+    // The message must name the real cause — unusable ice — rather than describing it as
+    // an uneven split, which it is not.
+    expect(feasibility.reason).toMatch(/can't be used/i);
+    expect(feasibility.reason).toMatch(/playing twice in one day/i);
   });
 
   it('surfaces the unplaceable slots instead of dropping them silently', () => {

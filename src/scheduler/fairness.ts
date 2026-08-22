@@ -49,6 +49,7 @@ export const calculateFairnessReport = (
         Friday: 0, Saturday: 0, Sunday: 0,
       },
       opponentGames: {},
+      sameDayDates: [],
       totalLateGames: 0,
       lateSurplus: 0,
       lateSlotFlagged: false,
@@ -101,6 +102,29 @@ export const calculateFairnessReport = (
         awayStats.opponentGames[homeTeam.name] = (awayStats.opponentGames[homeTeam.name] || 0) + 1;
       }
     }
+  }
+
+  // Same-day games. Structurally impossible for a well-configured season since v0.6, but
+  // still reachable through manual edits (`reassignSlot`) or a misconfigured roster.
+  const perTeamDate = new Map<string, Map<string, number>>();
+  for (const game of games) {
+    const slot = slotsById[game.slotId];
+    if (!slot) continue;
+    for (const teamId of [game.homeTeamId, game.awayTeamId]) {
+      const team = teamsById[teamId];
+      if (!team) continue;
+      const dates = perTeamDate.get(team.name) ?? new Map<string, number>();
+      dates.set(slot.date, (dates.get(slot.date) ?? 0) + 1);
+      perTeamDate.set(team.name, dates);
+    }
+  }
+  for (const [teamName, dates] of perTeamDate) {
+    const stats = teamStatsMap.get(teamName);
+    if (!stats) continue;
+    stats.sameDayDates = [...dates.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([date]) => date)
+      .sort();
   }
 
   for (const division of ['A', 'B'] as ('A' | 'B')[]) {

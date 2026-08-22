@@ -171,9 +171,31 @@ describe('unusedSlots persistence', () => {
 
     // A fresh import with entirely new slot ids must not leave the freed slot offerable:
     // reassigning it would mint a game whose slotId does not exist, which both the report
-    // and the CSV export skip silently.
+    // and the CSV export skip silently. (Here the whole schedule is orphaned too.)
     act(() => result.current.setIceSlots(SLOTS.map(s => ({ ...s, id: `new-${s.id}` }))));
     expect(result.current.unusedSlots).toEqual([]);
+    expect(result.current.schedule).toBeNull();
+  });
+
+  it('discards a schedule orphaned by a fresh ice-times import', () => {
+    const { result } = renderLoaded();
+    expect(result.current.schedule!.games.length).toBeGreaterThan(0);
+
+    // Parsers mint new ids per import, so every game's slotId stops resolving. Left in
+    // place the schedule renders blank rows and exports a header with no rows.
+    act(() => result.current.setIceSlots(SLOTS.map(s => ({ ...s, id: `new-${s.id}` }))));
+
+    expect(result.current.schedule).toBeNull();
+    expect(result.current.fairnessReport).toBeNull();
+    expect(result.current.unusedSlots).toEqual([]);
+    expect(result.current.iceSlots).toHaveLength(SLOTS.length);
+  });
+
+  it('keeps the schedule when the same ice is re-imported', () => {
+    const { result } = renderLoaded();
+    const games = result.current.schedule!.games.length;
+    act(() => result.current.setIceSlots([...SLOTS]));
+    expect(result.current.schedule!.games).toHaveLength(games);
   });
 
   it('survives storage that parses to a non-array', () => {

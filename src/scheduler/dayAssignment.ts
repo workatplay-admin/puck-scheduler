@@ -73,20 +73,35 @@ const checkFeasibility = (
     gamesPerTeam[d] = teamCounts[d] > 0 ? (assignedSlots[d].length * 2) / teamCounts[d] : 0;
   }
 
+  const dropped = totalSlots - (assignedSlots.A.length + assignedSlots.B.length);
   const offenders = eligible.filter(
     d => gamesPerTeam[d] < allowedRange[0] || gamesPerTeam[d] > allowedRange[1],
   );
-  if (offenders.length === 0) return { ok: true, gamesPerTeam, allowedRange };
+  if (offenders.length === 0 && dropped === 0) return { ok: true, gamesPerTeam, allowedRange };
 
-  const describe = (d: DivisionId) => `Division ${d} teams about ${Math.round(gamesPerTeam[d])}`;
-  return {
-    ok: false,
-    gamesPerTeam,
-    allowedRange,
-    reason:
-      `Your ice slots don't split evenly — ${eligible.map(describe).join(' and ')} games. ` +
-      `You can still generate, and teams within each division will still be balanced.`,
-  };
+  // Unplaceable ice is the more useful thing to say when it is the actual cause: a date
+  // carrying more slots than the divisions can host is a roster problem, and reporting it
+  // as "doesn't split evenly" would misdescribe it.
+  const parts: string[] = [];
+  if (dropped > 0) {
+    const teamsNeeded = Math.max(...eligible.map(d => teamCounts[d])) + 2;
+    parts.push(
+      `${dropped} of your ${totalSlots} ice slots can't be used — some dates have more ` +
+      `slots than your teams can fill without a team playing twice in one day. ` +
+      `Adding teams (about ${teamsNeeded} per division) or removing those slots would fix it.`,
+    );
+  }
+  if (offenders.length > 0) {
+    const describe = (d: DivisionId) => `Division ${d} teams about ${Math.round(gamesPerTeam[d])}`;
+    parts.push(
+      eligible.length > 1
+        ? `Your ice doesn't split evenly between divisions — ${eligible.map(describe).join(' and ')} games.`
+        : `${describe(eligible[0])} games, short of the ${allowedRange[0]}–${allowedRange[1]} this much ice allows.`,
+    );
+  }
+  parts.push('You can still generate, and teams within each division will still be balanced.');
+
+  return { ok: false, gamesPerTeam, allowedRange, reason: parts.join(' ') };
 };
 
 /**

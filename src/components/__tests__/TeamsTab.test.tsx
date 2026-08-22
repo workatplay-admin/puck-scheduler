@@ -135,7 +135,7 @@ describe('TeamsTab — rename', () => {
 describe('TeamsTab — feasibility banner', () => {
   it('stays quiet when the slot/team mix is balanced', () => {
     setup(false);
-    expect(screen.queryByText(/don't split evenly/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/can't be used|doesn't split evenly/i)).not.toBeInTheDocument();
   });
 
   it('warns above Generate when the mix is lopsided', () => {
@@ -148,7 +148,7 @@ describe('TeamsTab — feasibility banner', () => {
       dayOfWeek: 'Sunday',
     }));
     setup(false, crowded);
-    expect(screen.getByText(/don't split evenly/i)).toBeInTheDocument();
+    expect(screen.getByText(/can't be used/i)).toBeInTheDocument();
     // Advisory only: generation stays available.
     expect(screen.getByRole('button', { name: /generate schedule/i })).toBeEnabled();
   });

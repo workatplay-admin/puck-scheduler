@@ -56,6 +56,12 @@ export interface TeamStats {
   totalWeekend: number;
   dayOfWeekGames: Record<string, number>;
   opponentGames: Record<string, number>;
+  /**
+   * Dates on which this team plays more than once. Should be empty: same-day play is an
+   * invariant, not a preference. Carries the dates rather than a count so the report can
+   * point the commissioner at the games rather than just telling them a number.
+   */
+  sameDayDates: string[];
   totalLateGames: number;
   lateSurplus: number;
   lateSlotFlagged: boolean;

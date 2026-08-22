@@ -29,12 +29,31 @@ const makeFixture = (): { teams: Team[]; slots: IceSlot[] } => {
   return { teams: [...divA, ...divB], slots };
 };
 
+/**
+ * Regression tripwire, **not** a tuning target.
+ *
+ * It runs 5,000 iterations against a synthetic fixture while the app runs 50,000 against
+ * real data, so it says nothing about production quality or runtime — see
+ * `standards.md` §2.1. Regenerate the baseline deliberately whenever the objective
+ * function changes; v0.6 moved it twice (same-day penalty, then band terms).
+ */
 describe('perf regression — 8-team / 300-slot fixture', () => {
   it('stays within ±25% of stored baseline on bestScore and iterationCount', { timeout: 60_000 }, () => {
     const { teams, slots } = makeFixture();
-    const { schedule } = generateSchedule(slots, teams, DEFAULT_SETTINGS, { saIterations: SA_ITERS });
+    // Pinned seed. The generator is otherwise seeded randomly per run, which made this
+    // comparison depend on luck — tolerable while the objective was dominated by
+    // low-variance terms, but the v0.6 same-day penalty is charged in 5000-point steps
+    // and swung the score far outside the +/-25% band between consecutive runs.
+    const { schedule } = generateSchedule(slots, teams, DEFAULT_SETTINGS, {
+      seed: 20260822,
+      saIterations: SA_ITERS,
+    });
 
     expect(schedule.games.length).toBeGreaterThan(0);
+    // The pinned seed only governs attempt 0; attempts 1 and 2 reseed randomly. If this
+    // fixture ever trips an invariant the comparison silently becomes non-deterministic,
+    // so fail here instead.
+    expect(schedule.hasInvariantViolations).toBeFalsy();
 
     const bestScore = schedule.fairnessScore;
     const iterationCount = SA_ITERS;

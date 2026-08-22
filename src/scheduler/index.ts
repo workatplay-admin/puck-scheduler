@@ -148,12 +148,12 @@ export const generateSchedule = (
       bestResult = { schedule, unusedSlots };
     }
 
+    // Retry on violation even when the inputs are flagged infeasible. Day assignment is
+    // deterministic so the slot split will not change, but `buildMatchups` picks its bonus
+    // pairs from a seeded shuffle — and per-team game counts are exactly what invariant 1
+    // measures. Infeasible-but-generatable configurations are the likeliest to trip it, so
+    // suppressing their retries would surface an error where a reseed recovers.
     if (!violation) break;
-
-    // Retrying cannot help when day assignment is the cause: it is deterministic, so
-    // every attempt produces the identical slot split. Without this, an infeasible mix
-    // burns three full SA runs to arrive at the same answer.
-    if (!feasibility.ok) break;
   }
 
   return bestResult!;

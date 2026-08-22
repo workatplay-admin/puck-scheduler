@@ -115,18 +115,36 @@ export const useSchedulerStore = () => {
   /**
    * Replaces the full set of ice slots (used after CSV import).
    *
-   * Also drops any unused slot that the new import no longer contains. Without this a
-   * stale entry stays offerable in the Unused Slots panel, and reassigning it mints a game
-   * whose `slotId` does not exist — which both the fairness report and the CSV export skip
-   * silently.
+   * Discards anything that referred to the previous import. The parsers mint fresh slot
+   * ids on every file (`slot-csv-<n>-<timestamp>`), so a schedule generated against the
+   * old ice has games whose `slotId` no longer resolves: the Schedule tab renders blank
+   * dates and times, the fairness report keeps stale numbers, and the CSV export emits a
+   * header with no rows — silently. A schedule is meaningless against different ice, so it
+   * is cleared and the commissioner regenerates.
+   *
+   * Unused slots are pruned the same way, since re-assigning a stale one would mint a game
+   * against a slot that does not exist.
    */
   const setIceSlots = useCallback((slots: IceSlot[]) => {
     const slotIds = new Set(slots.map(s => s.id));
-    setState(prev => ({
-      ...prev,
-      iceSlots: slots,
-      unusedSlots: prev.unusedSlots.filter(s => slotIds.has(s.id)),
-    }));
+    setState(prev => {
+      const orphaned =
+        prev.schedule !== null && prev.schedule.games.some(g => !slotIds.has(g.slotId));
+
+      if (orphaned) {
+        scheduleWrite(STORAGE_SCHEDULE_KEY, null);
+        scheduleWrite(STORAGE_UNUSED_KEY, null);
+      }
+
+      return {
+        ...prev,
+        iceSlots: slots,
+        schedule: orphaned ? null : prev.schedule,
+        fairnessReport: orphaned ? null : prev.fairnessReport,
+        fairnessReportUpdated: orphaned ? false : prev.fairnessReportUpdated,
+        unusedSlots: orphaned ? [] : prev.unusedSlots.filter(s => slotIds.has(s.id)),
+      };
+    });
   }, []);
 
   /** Appends a new team to the roster. */

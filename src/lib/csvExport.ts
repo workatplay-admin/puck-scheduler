@@ -146,7 +146,7 @@ export const generateExportCSV = (
   lines.push('');
 
   lines.push('DAY-OF-WEEK DISTRIBUTION');
-  lines.push(csvRow(['Team', 'Division', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']));
+  lines.push(csvRow(['Team', 'Division', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', '2+ Same Day']));
 
   for (const stat of report.teamStats) {
     lines.push(csvRow([
@@ -159,6 +159,7 @@ export const generateExportCSV = (
       stat.dayOfWeekGames['Friday'] || 0,
       stat.dayOfWeekGames['Saturday'] || 0,
       stat.dayOfWeekGames['Sunday'] || 0,
+      stat.sameDayDates.map(formatDate).join('; '),
     ]));
   }
 
