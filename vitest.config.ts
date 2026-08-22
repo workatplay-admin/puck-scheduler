@@ -10,6 +10,9 @@ export default defineConfig({
       reporter: ['text', 'lcov'],
       include: ['src/**/*.{ts,tsx}'],
       exclude: [
+        // Components are tested (jsdom + @testing-library landed in v0.6) but stay out of
+        // the coverage report: it would pull in every generated shadcn primitive in
+        // src/components/ui/ and drown the signal.
         'src/components/**',
         'src/pages/**',
         'src/main.tsx',
@@ -28,8 +31,9 @@ export default defineConfig({
         // Aggregate thresholds for the pipeline and parser modules.
         'src/scheduler/**/*.ts': { lines: 80, branches: 70 },
         'src/parsers/**/*.ts': { lines: 80, branches: 80 },
-        // src/hooks/useSchedulerStore.ts threshold is parked until React
-        // hook test infrastructure (jsdom + @testing-library/react) lands.
+        // Hook coverage became measurable in v0.6 when jsdom + @testing-library/react
+        // landed. Set at the level the suite currently reaches, as a ratchet.
+        'src/hooks/useSchedulerStore.ts': { lines: 70, branches: 85 },
       },
     },
   },

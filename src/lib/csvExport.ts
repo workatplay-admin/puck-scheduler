@@ -2,6 +2,35 @@ import { Schedule, FairnessReport, IceSlot, Team, isDerivedWeekend } from '@/typ
 import { formatDate, formatTime } from './csvParser';
 
 /**
+ * Encodes a single CSV field per RFC 4180: wraps the value in double quotes when it
+ * contains a comma, double quote, CR or LF, and doubles any embedded double quote.
+ * Values with no special characters are returned unchanged so ordinary exports stay
+ * quote-free.
+ *
+ * Also neutralises spreadsheet formula injection. Team names are free text, and a name
+ * beginning `=`, `+`, `-` or `@` is evaluated as a formula by Excel and Google Sheets on
+ * open. Quoting alone does not help — the spreadsheet evaluates the field's *decoded*
+ * content — so such values are prefixed with an apostrophe, which both applications treat
+ * as "the rest of this cell is literal text".
+ *
+ * @param value - Raw cell value.
+ * @returns The field, escaped and quoted only if required.
+ */
+const csvCell = (value: string | number): string => {
+  const raw = String(value);
+  const s = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  return /["\r\n,]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+/**
+ * Joins one row of cells into a CSV record, encoding each field via {@link csvCell}.
+ *
+ * @param cells - Ordered cell values for the row.
+ * @returns A comma-delimited CSV record.
+ */
+const csvRow = (cells: Array<string | number>): string => cells.map(csvCell).join(',');
+
+/**
  * Generates a multi-section CSV string from a completed schedule and fairness report.
  *
  * The output contains sections for the schedule, games per team, time slot distribution,
@@ -23,7 +52,7 @@ export const generateExportCSV = (
   const lines: string[] = [];
 
   lines.push('SCHEDULE');
-  lines.push('Date,Day,Start Time,Division,Home Team,Away Team,Late Game,Weekend Game');
+  lines.push(csvRow(['Date', 'Day', 'Start Time', 'Division', 'Home Team', 'Away Team', 'Late Game', 'Weekend Game']));
 
   for (const game of schedule.games) {
     const slot = slotsById[game.slotId];
@@ -31,7 +60,7 @@ export const generateExportCSV = (
     const awayTeam = teamsById[game.awayTeamId];
     if (!slot || !homeTeam || !awayTeam) continue;
 
-    lines.push([
+    lines.push(csvRow([
       formatDate(slot.date),
       slot.dayOfWeek,
       formatTime(slot.startTime),
@@ -40,17 +69,17 @@ export const generateExportCSV = (
       awayTeam.name,
       report.lateTimeSlots.includes(slot.startTime) ? 'Yes' : 'No',
       isDerivedWeekend(slot) ? 'Yes' : 'No',
-    ].join(','));
+    ]));
   }
 
   lines.push('');
   lines.push('');
 
   lines.push('GAMES PER TEAM');
-  lines.push('Team,Division,Total Games');
+  lines.push(csvRow(['Team', 'Division', 'Total Games']));
 
   for (const stat of report.teamStats) {
-    lines.push([stat.teamName, `Division ${stat.division}`, stat.totalGames].join(','));
+    lines.push(csvRow([stat.teamName, `Division ${stat.division}`, stat.totalGames]));
   }
 
   lines.push('');
@@ -61,7 +90,7 @@ export const generateExportCSV = (
     const isLate = report.lateTimeSlots.includes(t);
     return `${formatTime(t)}${isLate ? ' (LATE)' : ''}`;
   })];
-  lines.push(timeSlotHeaders.join(','));
+  lines.push(csvRow(timeSlotHeaders));
 
   for (const stat of report.teamStats) {
     const row = [
@@ -69,50 +98,50 @@ export const generateExportCSV = (
       `Division ${stat.division}`,
       ...report.allTimeSlots.map(t => stat.timeSlots[t] || 0),
     ];
-    lines.push(row.join(','));
+    lines.push(csvRow(row));
   }
 
   lines.push('');
   lines.push('');
 
   lines.push('LATE SLOT FAIRNESS SUMMARY');
-  lines.push('Team,Division,Total Late,Late Surplus,Status');
+  lines.push(csvRow(['Team', 'Division', 'Total Late', 'Late Surplus', 'Status']));
 
   for (const stat of report.teamStats) {
-    lines.push([
+    lines.push(csvRow([
       stat.teamName,
       `Division ${stat.division}`,
       stat.totalLateGames,
       `+${stat.lateSurplus}`,
       stat.lateSlotFlagged ? 'FLAGGED' : 'OK',
-    ].join(','));
+    ]));
   }
 
   lines.push('');
   lines.push('');
 
   lines.push('FRIDAY & SATURDAY GAMES');
-  lines.push('Team,Division,Friday,Saturday,Total Weekend,Status');
+  lines.push(csvRow(['Team', 'Division', 'Friday', 'Saturday', 'Total Weekend', 'Status']));
 
   for (const stat of report.teamStats) {
-    lines.push([
+    lines.push(csvRow([
       stat.teamName,
       `Division ${stat.division}`,
       stat.fridayGames,
       stat.saturdayGames,
       stat.totalWeekend,
       stat.weekendFlagged ? 'FLAGGED' : 'OK',
-    ].join(','));
+    ]));
   }
 
   lines.push('');
   lines.push('');
 
   lines.push('DAY-OF-WEEK DISTRIBUTION');
-  lines.push('Team,Division,Mon,Tue,Wed,Thu,Fri,Sat,Sun');
+  lines.push(csvRow(['Team', 'Division', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']));
 
   for (const stat of report.teamStats) {
-    lines.push([
+    lines.push(csvRow([
       stat.teamName,
       `Division ${stat.division}`,
       stat.dayOfWeekGames['Monday'] || 0,
@@ -122,24 +151,24 @@ export const generateExportCSV = (
       stat.dayOfWeekGames['Friday'] || 0,
       stat.dayOfWeekGames['Saturday'] || 0,
       stat.dayOfWeekGames['Sunday'] || 0,
-    ].join(','));
+    ]));
   }
 
   lines.push('');
   lines.push('');
 
   lines.push('DIVISION BALANCE SUMMARY');
-  lines.push('Metric,Division A,Division B');
+  lines.push(csvRow(['Metric', 'Division A', 'Division B']));
 
   const divA = report.divisionBalance.find(d => d.division === 'A');
   const divB = report.divisionBalance.find(d => d.division === 'B');
 
-  lines.push(['Teams', divA?.teamCount || 0, divB?.teamCount || 0].join(','));
-  lines.push(['Total Games', divA?.totalGames || 0, divB?.totalGames || 0].join(','));
-  lines.push(['Games Per Team', divA?.gamesPerTeam ?? '0', divB?.gamesPerTeam ?? '0'].join(','));
-  lines.push(['Friday Game Days', divA?.fridayGameDays || 0, divB?.fridayGameDays || 0].join(','));
-  lines.push(['Saturday Game Days', divA?.saturdayGameDays || 0, divB?.saturdayGameDays || 0].join(','));
-  lines.push(['Total Late Slots', divA?.totalLateSlots || 0, divB?.totalLateSlots || 0].join(','));
+  lines.push(csvRow(['Teams', divA?.teamCount || 0, divB?.teamCount || 0]));
+  lines.push(csvRow(['Total Games', divA?.totalGames || 0, divB?.totalGames || 0]));
+  lines.push(csvRow(['Games Per Team', divA?.gamesPerTeam ?? '0', divB?.gamesPerTeam ?? '0']));
+  lines.push(csvRow(['Friday Game Days', divA?.fridayGameDays || 0, divB?.fridayGameDays || 0]));
+  lines.push(csvRow(['Saturday Game Days', divA?.saturdayGameDays || 0, divB?.saturdayGameDays || 0]));
+  lines.push(csvRow(['Total Late Slots', divA?.totalLateSlots || 0, divB?.totalLateSlots || 0]));
 
   return lines.join('\n');
 };

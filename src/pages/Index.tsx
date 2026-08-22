@@ -255,8 +255,11 @@ const Index = () => {
         {store.currentTab === 1 && (
           <TeamsTab
             teams={store.teams}
+            scheduleExists={canAccessSchedule}
             onAddTeam={store.addTeam}
             onRemoveTeam={store.removeTeam}
+            onRenameTeam={store.renameTeam}
+            onClearSchedule={store.clearSchedule}
             onBack={() => store.setCurrentTab(0)}
             onGenerate={handleGenerateSchedule}
           />
