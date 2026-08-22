@@ -5,6 +5,7 @@ import { generateSchedule, calculateFairnessReport } from '@/scheduler';
 import { buildSlotsById, buildTeamsById, DEFAULT_SETTINGS } from '@/types/scheduler';
 import type { IceSlot, Team } from '@/types/scheduler';
 
+
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const buildSlots = (): IceSlot[] => {
@@ -181,5 +182,47 @@ describe('csvExport — orphaned games (the bug the roster lock prevents)', () =
     // Regression record: the export is short by every game the deleted team played, with
     // no warning anywhere. TeamsTab's roster lock is what makes this unreachable.
     expect(rows.length).toBeLessThan(schedule.games.length);
+  });
+});
+
+describe('csvExport — v0.6 sections', () => {
+  const buildFor = (dayOfWeek: string) => {
+    const slots: IceSlot[] = Array.from({ length: 8 }, (_, i) => ({
+      id: `w${i}`,
+      date: `2026-02-${String(i + 1).padStart(2, '0')}`,
+      startTime: i % 2 === 0 ? '16:30' : '21:00',
+      dayOfWeek,
+    }));
+    const teams: Team[] = PLAIN.map((name, i) => ({
+      id: `t${i}`, name, division: i < 2 ? 'A' : 'B',
+    }));
+    const { schedule } = generateSchedule(slots, teams, DEFAULT_SETTINGS, { seed: 7, saIterations: 50 });
+    const report = calculateFairnessReport(schedule, slots, teams, DEFAULT_SETTINGS);
+    return generateExportCSV(schedule, report, buildSlotsById(slots), buildTeamsById(teams));
+  };
+
+  it('carries the time-of-day summary as well as the full grid', () => {
+    const csv = buildFor('Monday');
+    const titles = sections(csv).map(b => b[0]);
+    expect(titles).toContain('TIME OF DAY');
+    expect(titles).toContain('TIME SLOT DISTRIBUTION');
+  });
+
+  it('omits the weekend section when the season has no Fri/Sat ice', () => {
+    const csv = buildFor('Monday');
+    expect(sections(csv).map(b => b[0])).not.toContain('FRIDAY & SATURDAY GAMES');
+    expect(csv).not.toContain('Friday Game Days');
+  });
+
+  it('includes it when the season does', () => {
+    const csv = buildFor('Friday');
+    expect(sections(csv).map(b => b[0])).toContain('FRIDAY & SATURDAY GAMES');
+    expect(csv).toContain('Friday Game Days');
+  });
+
+  it('carries the same-day column with formatted dates', () => {
+    const csv = buildFor('Monday');
+    const block = sections(csv).find(b => b[0] === 'DAY-OF-WEEK DISTRIBUTION')!;
+    expect(block[1]).toContain('Same-Day Dates');
   });
 });

@@ -1,4 +1,4 @@
-import { isDerivedLate, isDerivedWeekend } from '@/types/scheduler';
+import { bandOf, isDerivedLate, isDerivedWeekend } from '@/types/scheduler';
 import type { IceSlot } from '@/types/scheduler';
 import type { GameAssignment, ScoreFn } from './types';
 
@@ -8,6 +8,26 @@ import type { GameAssignment, ScoreFn } from './types';
  * acceptable, but it must not outrank the weekly cap.
  */
 const SAME_DAY_PENALTY = 5000;
+
+/**
+ * Weights for balancing each team's **total** prime and afternoon games across its
+ * division. Deliberately an order of magnitude below the late terms: where the two
+ * conflict, late fairness wins.
+ *
+ * Per-band totals rather than per-individual-slot — balancing all ten columns separately
+ * adds five competing terms and is the likeliest to fight the rigid late constraint.
+ *
+ * Provisional. Tuned by measurement in plan Phase 5 (DAV-213).
+ */
+const PRIME_BAND_WEIGHT = 150;
+const AFTERNOON_BAND_WEIGHT = 150;
+
+/** Population variance of a list of counts. */
+const variance = (counts: number[]): number => {
+  if (counts.length === 0) return 0;
+  const mean = counts.reduce((sum, c) => sum + c, 0) / counts.length;
+  return counts.reduce((sum, c) => sum + (c - mean) ** 2, 0) / counts.length;
+};
 
 const weekOf = (dateStr: string): number => {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -29,6 +49,7 @@ const daysBetween = (a: string, b: string): number => {
  * - Weekend-game variance across teams, ×100
  * - Consecutive-week same-opponent pairings, ×50 each
  * - Rest-day violations (< 2 days between games), ×25 each
+ * - Prime-band and afternoon-band totals per team, ×150 each — time-of-day fairness
  * - Extra same-day games per team, ×5000 each — never permitted (PRD §3.2.3)
  * - `maxGamesPerWeek` excess games per team-week, ×10000 each
  *
@@ -47,6 +68,8 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
   const teamWeeklyGames = new Map<string, Map<number, number>>();
   const teamGameDates = new Map<string, string[]>();
   const teamDateCounts = new Map<string, Map<string, number>>();
+  const teamPrime = new Map<string, number>();
+  const teamAfternoon = new Map<string, number>();
   const teamOppByWeek = new Map<string, Map<number, string[]>>();
 
   for (const id of teamIds) {
@@ -55,6 +78,8 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
     teamWeeklyGames.set(id, new Map());
     teamGameDates.set(id, []);
     teamDateCounts.set(id, new Map());
+    teamPrime.set(id, 0);
+    teamAfternoon.set(id, 0);
     teamOppByWeek.set(id, new Map());
   }
 
@@ -76,6 +101,9 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
       teamGameDates.get(teamId)!.push(slot.date);
       const dc = teamDateCounts.get(teamId)!;
       dc.set(slot.date, (dc.get(slot.date) ?? 0) + 1);
+      const band = bandOf(slot, settings);
+      if (band === 'prime') teamPrime.set(teamId, (teamPrime.get(teamId) ?? 0) + 1);
+      else if (band === 'afternoon') teamAfternoon.set(teamId, (teamAfternoon.get(teamId) ?? 0) + 1);
       const owm = teamOppByWeek.get(teamId)!;
       const opps = owm.get(week) ?? [];
       opps.push(oppId);
@@ -119,9 +147,14 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
     for (const lateSlot of lateSlots) {
       const counts = divTeamIds.map(id => teamLateGames.get(id)?.get(lateSlot) ?? 0);
       const mean = counts.reduce((s, c) => s + c, 0) / counts.length;
-      const variance = counts.reduce((s, c) => s + (c - mean) ** 2, 0) / counts.length;
-      total += variance * 100;
+      const slotVariance = counts.reduce((s, c) => s + (c - mean) ** 2, 0) / counts.length;
+      total += slotVariance * 100;
     }
+
+    // Time-of-day band totals. Uses the same scheduled-teams population as the late
+    // terms, so the objective and the report point at the same quantity.
+    total += variance(divTeamIds.map(id => teamPrime.get(id) ?? 0)) * PRIME_BAND_WEIGHT;
+    total += variance(divTeamIds.map(id => teamAfternoon.get(id) ?? 0)) * AFTERNOON_BAND_WEIGHT;
 
     // Weekend variance ×100
     const wCounts = divTeamIds.map(id => teamWeekendGames.get(id) ?? 0);

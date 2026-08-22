@@ -184,9 +184,9 @@ Displayed below the schedule. Contains the following sections:
 | Icehogs | A | 38 |
 | ... | ... | ... |
 
-**Section B: Time Slot Distribution**
+**Section B: Time of Day**
 
-Shows ALL time slots. Late slots (8:45pm+) are marked with ⚠ and tracked for fairness. Early slots shown for reference only.
+Defaults to three summary columns — Afternoon (before the prime window), Prime, and Late (⚠, graded for fairness). The full per-time-slot grid is available behind a **Show all time slots** disclosure: a team can look balanced on every individual column while still collecting a disproportionate share of a whole part of the day, which is what the summary makes visible.
 
 | Team | Div | 5:00pm | 6:30pm | 7:45pm | 8:45pm ⚠ | 9:15pm ⚠ | 10:15pm ⚠ |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
@@ -204,7 +204,7 @@ Shows ALL time slots. Late slots (8:45pm+) are marked with ⚠ and tracked for f
 
 *Late Surplus = team's total late games minus the lowest total in their division. Flagged if it strictly exceeds the configured threshold (default +2).*
 
-**Section D: Friday & Saturday Games**
+**Section D: Friday & Saturday Games** *(hidden when the season contains no Friday or Saturday ice, which is common — an all-zero table of "✓ OK" tells the commissioner nothing)*
 
 | Team | Division | Friday | Saturday | Total Weekend | Flagged? |
 | :---- | :---- | :---- | :---- | :---- | :---- |
@@ -212,7 +212,7 @@ Shows ALL time slots. Late slots (8:45pm+) are marked with ⚠ and tracked for f
 | Icehogs | A | 4 | 5 | 9 | ✓ OK |
 | Rebels | A | 6 | 6 | 12 | ⚠ FLAG |
 
-**Section E: Day-of-Week Distribution**
+**Section E: Day-of-Week Distribution** *(includes a "2+ same day" column; should read zero for every team)*
 
 | Team | Mon | Tue | Wed | Thu | Fri | Sat | Sun |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
@@ -225,7 +225,7 @@ Shows ALL time slots. Late slots (8:45pm+) are marked with ⚠ and tracked for f
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
 | Sluggers | 6 | 5 | 6 | 5 | 6 | 5 |
 
-**Section G: Division Balance Summary**
+**Section G: Division Balance Summary** *(informational only — teams never play across divisions, so a difference between them is not an unfairness. Friday/Saturday rows are hidden when the season has no weekend ice.)*
 
 | Metric | Division A | Division B |
 | :---- | :---- | :---- |

@@ -202,7 +202,7 @@ const Index = () => {
                 <Trash2 className="w-4 h-4 mr-2" />
                 Start New
               </Button>
-              <SettingsPanel settings={store.settings} onUpdateSettings={store.updateSettings} />
+              <SettingsPanel settings={store.settings} iceSlots={store.iceSlots} onUpdateSettings={store.updateSettings} />
             </div>
           </div>
         </div>

@@ -93,6 +93,21 @@ export const generateExportCSV = (
   lines.push('');
   lines.push('');
 
+  lines.push('TIME OF DAY');
+  lines.push(csvRow(['Team', 'Division', 'Afternoon', 'Prime', 'Late']));
+  for (const stat of report.teamStats) {
+    lines.push(csvRow([
+      stat.teamName,
+      `Division ${stat.division}`,
+      stat.afternoonGames,
+      stat.primeGames,
+      stat.totalLateGames,
+    ]));
+  }
+
+  lines.push('');
+  lines.push('');
+
   lines.push('TIME SLOT DISTRIBUTION');
   const timeSlotHeaders = ['Team', 'Division', ...report.allTimeSlots.map(t => {
     const isLate = report.lateTimeSlots.includes(t);
@@ -128,25 +143,29 @@ export const generateExportCSV = (
   lines.push('');
   lines.push('');
 
-  lines.push('FRIDAY & SATURDAY GAMES');
-  lines.push(csvRow(['Team', 'Division', 'Friday', 'Saturday', 'Total Weekend', 'Status']));
+  // Omitted entirely for a season with no Friday or Saturday ice, so the file matches
+  // what the report shows rather than carrying a table of zeros.
+  if (report.hasWeekendIce) {
+    lines.push('FRIDAY & SATURDAY GAMES');
+    lines.push(csvRow(['Team', 'Division', 'Friday', 'Saturday', 'Total Weekend', 'Status']));
 
-  for (const stat of report.teamStats) {
-    lines.push(csvRow([
-      stat.teamName,
-      `Division ${stat.division}`,
-      stat.fridayGames,
-      stat.saturdayGames,
-      stat.totalWeekend,
-      stat.weekendFlagged ? 'FLAGGED' : 'OK',
-    ]));
+    for (const stat of report.teamStats) {
+      lines.push(csvRow([
+        stat.teamName,
+        `Division ${stat.division}`,
+        stat.fridayGames,
+        stat.saturdayGames,
+        stat.totalWeekend,
+        stat.weekendFlagged ? 'FLAGGED' : 'OK',
+      ]));
+    }
+
+    lines.push('');
+    lines.push('');
   }
 
-  lines.push('');
-  lines.push('');
-
   lines.push('DAY-OF-WEEK DISTRIBUTION');
-  lines.push(csvRow(['Team', 'Division', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', '2+ Same Day']));
+  lines.push(csvRow(['Team', 'Division', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Same-Day Dates']));
 
   for (const stat of report.teamStats) {
     lines.push(csvRow([
@@ -175,8 +194,10 @@ export const generateExportCSV = (
   lines.push(csvRow(['Teams', divA?.teamCount || 0, divB?.teamCount || 0]));
   lines.push(csvRow(['Total Games', divA?.totalGames || 0, divB?.totalGames || 0]));
   lines.push(csvRow(['Games Per Team', divA?.gamesPerTeam ?? '0', divB?.gamesPerTeam ?? '0']));
-  lines.push(csvRow(['Friday Game Days', divA?.fridayGameDays || 0, divB?.fridayGameDays || 0]));
-  lines.push(csvRow(['Saturday Game Days', divA?.saturdayGameDays || 0, divB?.saturdayGameDays || 0]));
+  if (report.hasWeekendIce) {
+    lines.push(csvRow(['Friday Game Days', divA?.fridayGameDays || 0, divB?.fridayGameDays || 0]));
+    lines.push(csvRow(['Saturday Game Days', divA?.saturdayGameDays || 0, divB?.saturdayGameDays || 0]));
+  }
   lines.push(csvRow(['Total Late Slots', divA?.totalLateSlots || 0, divB?.totalLateSlots || 0]));
 
   return lines.join('\n');

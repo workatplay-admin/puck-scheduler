@@ -100,7 +100,7 @@ interface Settings {
   lateSlotVarianceFlag: number; // Flag if Late Surplus > this (default: 2). Field name kept for storage compatibility.
   weekendVarianceFlag: number;  // Flag if weekend-game count exceeds the division minimum by more than this (default: 3)
   maxGamesPerWeek: number;      // Hard cap (default: 3)
-  // --- planned for v0.6 (not yet implemented) ---
+  // --- added in v0.6 ---
   primeWindowStart: string;     // '17:45'. Bands: afternoon < primeWindowStart
                                 // <= prime < lateGameThreshold <= late. Only the lower
                                 // bound is stored; the upper bound is lateGameThreshold.
@@ -364,9 +364,9 @@ The scoring function quantifies "unfairness" as a single number. Lower is better
 | Consecutive opponent penalty | 50 | Avoid playing same team in back-to-back weeks. |
 | Rest day violation (<2 days) | 25 | Soft constraint. Less than 2 days rest is bad. |
 | Max games/week violation | 10000 | Hard constraint. Massive penalty ensures this is never violated. |
-| **Same-day game (per extra game)** | **5000** | v0.6 *(planned; provisional)*. Above every soft term, below the hard weekly cap. Always on — same-day play is an invariant. Structural blocking (§5.1) does the real work; this penalises the remainder. |
-| Prime-band total variance (per team) | *TBD* | v0.6 *(planned)*. Balances each team's total prime-time games; weighted below the late terms — where the two conflict, late fairness wins. Weight is **set by measurement in plan Phase 5**, not assumed: a trial at 150 left afternoon spread at 2, while 1500 reached 0 but degraded prime. |
-| Afternoon-band total variance (per team) | *TBD* | v0.6 *(planned)*. As above, for the least-desirable non-late band. |
+| **Same-day game (per extra game)** | **5000** | v0.6 *(shipped)*. Above every soft term, below the hard weekly cap. Always on — same-day play is an invariant. Structural blocking (§5.1) does the real work; this penalises the remainder. |
+| Prime-band total variance (per team) | 150 | v0.6 *(shipped; provisional pending Phase 5 tuning)*. Balances each team's total prime-time games; weighted below the late terms — where the two conflict, late fairness wins. Measured on the real season: prime spread fell from 4 (Div A) / 6 (Div B) to 1 / 1. |
+| Afternoon-band total variance (per team) | 150 | v0.6 *(shipped; provisional)*. As above. Afternoon spread fell from 4 / 6 to 2 / 1. |
 
 > **Band terms are per-band *totals*, not per-individual-slot.** Balancing all ten
 > individual columns was considered and rejected: it adds five competing terms and is the

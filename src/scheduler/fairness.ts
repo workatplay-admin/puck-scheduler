@@ -1,5 +1,5 @@
 import {
-  buildSlotsById, buildTeamsById, isDerivedLate, isDerivedWeekend,
+  bandOf, buildSlotsById, buildTeamsById, isDerivedLate, isDerivedWeekend,
 } from '@/types/scheduler';
 import type {
   IceSlot, Team, Schedule, SchedulerSettings, FairnessReport, TeamStats, DivisionBalance,
@@ -50,6 +50,8 @@ export const calculateFairnessReport = (
       },
       opponentGames: {},
       sameDayDates: [],
+      primeGames: 0,
+      afternoonGames: 0,
       totalLateGames: 0,
       lateSurplus: 0,
       lateSlotFlagged: false,
@@ -79,8 +81,12 @@ export const calculateFairnessReport = (
     const homeStats = teamStatsMap.get(homeTeam.name);
     const awayStats = teamStatsMap.get(awayTeam.name);
 
+    const band = bandOf(slot, settings);
+
     if (homeStats) {
       homeStats.totalGames++;
+      if (band === 'prime') homeStats.primeGames++;
+      else if (band === 'afternoon') homeStats.afternoonGames++;
       homeStats.timeSlots[slot.startTime] = (homeStats.timeSlots[slot.startTime] || 0) + 1;
       homeStats.dayOfWeekGames[slot.dayOfWeek] = (homeStats.dayOfWeekGames[slot.dayOfWeek] || 0) + 1;
       if (slot.dayOfWeek === 'Friday') homeStats.fridayGames++;
@@ -93,6 +99,8 @@ export const calculateFairnessReport = (
 
     if (awayStats) {
       awayStats.totalGames++;
+      if (band === 'prime') awayStats.primeGames++;
+      else if (band === 'afternoon') awayStats.afternoonGames++;
       awayStats.timeSlots[slot.startTime] = (awayStats.timeSlots[slot.startTime] || 0) + 1;
       awayStats.dayOfWeekGames[slot.dayOfWeek] = (awayStats.dayOfWeekGames[slot.dayOfWeek] || 0) + 1;
       if (slot.dayOfWeek === 'Friday') awayStats.fridayGames++;
@@ -229,5 +237,10 @@ export const calculateFairnessReport = (
     divisionBalance,
     allTimeSlots,
     lateTimeSlots,
+    hasWeekendIce: slots.some(isDerivedWeekend),
+    bandBoundaries: {
+      primeWindowStart: settings.primeWindowStart,
+      lateGameThreshold: settings.lateGameThreshold,
+    },
   };
 };

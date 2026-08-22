@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { SchedulerState, IceSlot, Team, Game, Schedule, SchedulerSettings, FairnessReport, DEFAULT_SETTINGS } from '@/types/scheduler';
+import { SchedulerState, IceSlot, Team, Game, Schedule, SchedulerSettings, FairnessReport, DEFAULT_SETTINGS, parseSettings } from '@/types/scheduler';
 import { calculateFairnessReport } from '@/scheduler';
 import { scheduleWrite, flushPending, cancelPending } from '@/lib/debouncedStorage';
 import { generateId } from '@/lib/generateId';
@@ -52,7 +52,7 @@ const getInitialState = (): SchedulerState => {
   const iceSlots = loadItem<IceSlot[]>(STORAGE_SLOTS_KEY, []);
   const teams = loadItem<Team[]>(STORAGE_TEAMS_KEY, []);
   const schedule = loadItem<Schedule | null>(STORAGE_SCHEDULE_KEY, null);
-  const settings = { ...DEFAULT_SETTINGS, ...loadItem<Partial<SchedulerSettings>>(STORAGE_SETTINGS_KEY, {}) };
+  const settings = parseSettings(loadItem<unknown>(STORAGE_SETTINGS_KEY, {}));
 
   // Unused slots are only meaningful alongside a schedule, and only for slots that still
   // exist. `loadItem` guards malformed JSON but not shape: a stored value that parses to
@@ -168,9 +168,26 @@ export const useSchedulerStore = () => {
     }));
   }, []);
 
-  /** Merges partial settings into the current settings. */
-  const updateSettings = useCallback((settings: Partial<SchedulerSettings>) => {
-    setState(prev => ({ ...prev, settings: { ...prev.settings, ...settings } }));
+  /**
+   * Merges partial settings into the current settings.
+   *
+   * Flags the fairness report as out of date whenever a setting the report depends on
+   * changes. The report snapshots the thresholds it was computed with, so its numbers stay
+   * self-consistent — but they no longer reflect the current settings until recalculated,
+   * and the badge is how the user is told.
+   */
+  const updateSettings = useCallback((patch: Partial<SchedulerSettings>) => {
+    const AFFECTS_REPORT: Array<keyof SchedulerSettings> = [
+      'lateGameThreshold', 'primeWindowStart', 'lateSlotVarianceFlag', 'weekendVarianceFlag',
+    ];
+    setState(prev => ({
+      ...prev,
+      settings: { ...prev.settings, ...patch },
+      fairnessReportUpdated:
+        prev.fairnessReport !== null && AFFECTS_REPORT.some(k => k in patch)
+          ? true
+          : prev.fairnessReportUpdated,
+    }));
   }, []);
 
   /** Navigates to the given tab index. */
