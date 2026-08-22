@@ -54,6 +54,7 @@ describe('validation', () => {
     const { onUpdateSettings } = await open();
     const prime = screen.getByLabelText('Prime time starts');
     fireEvent.change(prime, { target: { value: '22:00' } });
+    fireEvent.blur(prime);
     expect(onUpdateSettings).not.toHaveBeenCalledWith(expect.objectContaining({ primeWindowStart: '22:00' }));
     expect(screen.getByText(/must start before the late-game threshold/i)).toBeInTheDocument();
   });
@@ -63,6 +64,7 @@ describe('validation', () => {
     const { onUpdateSettings } = await open();
     const late = screen.getByLabelText('Late game threshold');
     fireEvent.change(late, { target: { value: '17:00' } });
+    fireEvent.blur(late);
     expect(onUpdateSettings).not.toHaveBeenCalledWith(expect.objectContaining({ lateGameThreshold: '17:00' }));
   });
 
@@ -70,7 +72,35 @@ describe('validation', () => {
     // An empty value makes `startTime >= ''` true for every slot, classifying the whole
     // season as late.
     const { onUpdateSettings } = await open();
-    fireEvent.change(screen.getByLabelText('Late game threshold'), { target: { value: '' } });
+    const late = screen.getByLabelText('Late game threshold');
+    fireEvent.change(late, { target: { value: '' } });
+    fireEvent.blur(late);
     expect(onUpdateSettings).not.toHaveBeenCalledWith(expect.objectContaining({ lateGameThreshold: '' }));
+  });
+});
+
+describe('typing through invalid intermediates', () => {
+  it('lets a value be typed digit by digit without snapping back', async () => {
+    // Committing per keystroke made 21/22/23 untypable: with prime at 17:45, the
+    // intermediate "02:45" is a valid time but earlier than prime, so it was rejected and
+    // the controlled input rewrote the old value before the second digit arrived.
+    const { onUpdateSettings } = await open();
+    const late = screen.getByLabelText('Late game threshold');
+
+    fireEvent.change(late, { target: { value: '02:45' } }); // intermediate
+    expect(late).toHaveValue('02:45');                      // draft is not reverted
+    expect(onUpdateSettings).not.toHaveBeenCalled();        // nor committed
+
+    fireEvent.change(late, { target: { value: '22:00' } }); // final
+    fireEvent.blur(late);
+    expect(onUpdateSettings).toHaveBeenCalledWith({ lateGameThreshold: '22:00' });
+  });
+
+  it('reverts the draft when the committed value is rejected', async () => {
+    await open();
+    const late = screen.getByLabelText('Late game threshold');
+    fireEvent.change(late, { target: { value: '02:45' } });
+    fireEvent.blur(late);
+    expect(late).toHaveValue(DEFAULT_SETTINGS.lateGameThreshold);
   });
 });

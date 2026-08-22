@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Settings, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,10 +22,42 @@ export const SettingsPanel = ({ settings, iceSlots = [], onUpdateSettings }: Set
   const [primeError, setPrimeError] = useState<string | null>(null);
   const [lateError, setLateError] = useState<string | null>(null);
 
+  // Time inputs edit a local draft and commit on blur or Enter.
+  //
+  // Committing on every keystroke makes some values untypable: with prime at 17:45,
+  // typing "22:00" into the late field passes through the intermediate "02:45", which is
+  // a valid time but earlier than prime — so it is rejected, and because the input is
+  // controlled React writes the old value straight back before the second digit lands.
+  // Every retry repeats it, putting 21/22/23 out of reach.
+  const [lateDraft, setLateDraft] = useState(settings.lateGameThreshold);
+  const [primeDraft, setPrimeDraft] = useState(settings.primeWindowStart);
+
+  useEffect(() => setLateDraft(settings.lateGameThreshold), [settings.lateGameThreshold]);
+  useEffect(() => setPrimeDraft(settings.primeWindowStart), [settings.primeWindowStart]);
+
   const handleReset = () => {
     onUpdateSettings(DEFAULT_SETTINGS);
     setPrimeError(null);
     setLateError(null);
+    setLateDraft(DEFAULT_SETTINGS.lateGameThreshold);
+    setPrimeDraft(DEFAULT_SETTINGS.primeWindowStart);
+  };
+
+  /** Commits a draft, or reverts it to the stored value if it cannot be applied. */
+  const commit = (
+    key: 'lateGameThreshold' | 'primeWindowStart',
+    draft: string,
+    setDraft: (v: string) => void,
+    setError: (v: string | null) => void,
+  ) => {
+    if (draft === settings[key]) return setError(null);
+    const error = applyIfValid(key, draft);
+    setError(error);
+    if (error) setDraft(settings[key]);
+  };
+
+  const commitOnEnter = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
   };
 
   /**
@@ -98,8 +130,10 @@ export const SettingsPanel = ({ settings, iceSlots = [], onUpdateSettings }: Set
                 <Input
                   type="time"
                   aria-label="Late game threshold"
-                  value={settings.lateGameThreshold}
-                  onChange={(e) => setLateError(applyIfValid('lateGameThreshold', e.target.value))}
+                  value={lateDraft}
+                  onChange={(e) => setLateDraft(e.target.value)}
+                  onBlur={() => commit('lateGameThreshold', lateDraft, setLateDraft, setLateError)}
+                  onKeyDown={commitOnEnter}
                   className="w-32"
                 />
                 <span className="text-sm text-muted-foreground">
@@ -207,8 +241,10 @@ export const SettingsPanel = ({ settings, iceSlots = [], onUpdateSettings }: Set
                 <Input
                   id="prime-start"
                   type="time"
-                  value={settings.primeWindowStart}
-                  onChange={(e) => setPrimeError(applyIfValid('primeWindowStart', e.target.value))}
+                  value={primeDraft}
+                  onChange={(e) => setPrimeDraft(e.target.value)}
+                  onBlur={() => commit('primeWindowStart', primeDraft, setPrimeDraft, setPrimeError)}
+                  onKeyDown={commitOnEnter}
                   className="w-32"
                 />
                 <span className="text-sm text-muted-foreground">(default: 5:45 PM)</span>

@@ -34,9 +34,10 @@ src/
   scheduler/      Scheduling pipeline (extracted from lib in v0.5)
                     index.ts         — generateSchedule entry point + re-exports
                     types.ts         — internal types (DivisionId, ScoreFn, …)
-                    dayAssignment.ts — partition slots by division
+                    dayAssignment.ts — partition slots into contiguous
+                                       per-division blocks (v0.6)
                     matchups.ts      — round-robin pair generation
-                    scoring.ts       — default ScoreFn implementation
+                    scoring.ts       — createScore factory + default ScoreFn
                     slotOptimizer.ts — simulated-annealing slot assignment
                     homeAway.ts      — convert assignments → Game records
                     fairness.ts      — calculateFairnessReport
@@ -47,10 +48,9 @@ src/
 docs/
   adr.md          Architecture decision record (canonical)
   prd.md          Product requirements document (canonical)
-  v0.6-fairness-plan.md  Active implementation plan — reviewed, not yet
-                  implemented (slot-block assignment, time-of-day fairness,
-                  same-day elimination)
   archive/        Completed migration plans, governance reviews, superseded specs
+                  (incl. v0.6-fairness-plan.md — slot blocks, time-of-day
+                  fairness, same-day elimination)
 ```
 
 Core scheduling logic is in `src/scheduler/` (entry: `src/scheduler/index.ts`). File import lives in `src/parsers/`; CSV export in `src/lib/csvExport.ts`.

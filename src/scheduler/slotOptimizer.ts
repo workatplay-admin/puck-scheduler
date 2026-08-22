@@ -4,8 +4,20 @@ import type { DivisionId, GameAssignment, MatchupsByDivision, ScoreFn, SlotsByDi
 
 const SA_ITER = 50_000;
 const T0 = 1000;
-const COOLING = 0.9997;
 const MIN_T = 0.1;
+
+/**
+ * Cooling rate that brings the temperature from `T0` down to `MIN_T` across exactly
+ * `iterations` steps.
+ *
+ * Previously this was a fixed 0.9997, which reached the floor at iteration ~30,700
+ * regardless of the budget: `ln(MIN_T / T0) / ln(0.9997)`. Everything past that point was
+ * greedy hill-climbing, so at 50k iterations 39% of the run explored nothing and raising
+ * the count bought almost nothing at all. Tying the rate to the budget makes the iteration
+ * count a real dial.
+ */
+const coolingFor = (iterations: number): number =>
+  iterations < 2 ? 0 : Math.exp(Math.log(MIN_T / T0) / iterations);
 
 /**
  * Assigns matchups to ice slots using simulated annealing (ADR §5.3.2).
@@ -15,8 +27,9 @@ const MIN_T = 0.1;
  * games and accepting improvements unconditionally or worse states with
  * probability `exp(−Δ/T)`. The best-seen solution is always returned.
  *
- * Starting parameters: 50k iterations / T₀=1000 / cooling=0.9997 / minT=0.1.
- * These are tunable; a convergence test gates any retune (Phase 3 spec).
+ * Starting parameters: 50k iterations / T₀=1000 / minT=0.1, with the cooling rate derived
+ * from the iteration budget so the whole run is spent exploring. A convergence test gates
+ * any retune.
  *
  * @param matchups        - Shuffled matchup pool per division.
  * @param slotsByDivision - Ice slots partitioned by division.
@@ -78,6 +91,7 @@ export const assignSlots = (
   let best = current.slice();
   let bestScore = currentScore;
   let T = T0;
+  const cooling = coolingFor(iterations);
 
   onProgress?.(0, currentScore, bestScore);
 
@@ -116,7 +130,7 @@ export const assignSlots = (
       }
     }
 
-    T = Math.max(T * COOLING, MIN_T);
+    T = Math.max(T * cooling, MIN_T);
 
     if (onProgress && (iter + 1) % 500 === 0) {
       onProgress(iter + 1, currentScore, bestScore);

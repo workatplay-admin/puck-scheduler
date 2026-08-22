@@ -1,9 +1,9 @@
-import { RefreshCw, Check, AlertTriangle, Clock, Calendar as CalendarIcon, Users } from 'lucide-react';
+import { RefreshCw, Check, AlertTriangle, Calendar as CalendarIcon, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FairnessReport, SchedulerSettings } from '@/types/scheduler';
-import { formatDate, formatTime } from '@/lib/csvParser';
+import { formatDate } from '@/lib/csvParser';
 import { FairnessSectionB } from '@/components/FairnessSectionB';
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';

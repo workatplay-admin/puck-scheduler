@@ -29,7 +29,7 @@ A single league commissioner with no coding experience but solid understanding o
 
 ## **1.4 Success Criteria**
 
-* Schedule generation completes in under 30 seconds
+* Schedule generation completes in about a minute for a full season (measured: 63s for 236 slots / 16 teams)
 * No team plays more than 1 game more than any other team in their division
 * Late time slots and undesirable days are distributed as evenly as possible across teams
 * Commissioner can go from "upload" to "exported schedule" in under 30 minutes
@@ -308,7 +308,7 @@ A simple settings panel accessible from the main interface, allowing the commiss
 
 ## **4.1 Performance**
 
-* Schedule generation: < 30 seconds for ~300 games
+* Schedule generation: ~63s for a 236-slot season; budget 90s (see `standards.md` §2.1)
 * Page load: < 3 seconds
 * Export generation: < 5 seconds
 

@@ -19,8 +19,13 @@ const SAME_DAY_PENALTY = 5000;
  *
  * Provisional. Tuned by measurement in plan Phase 5 (DAV-213).
  */
-const PRIME_BAND_WEIGHT = 150;
-const AFTERNOON_BAND_WEIGHT = 150;
+export const BAND_WEIGHTS = { prime: 150, afternoon: 150 } as const;
+
+/** Weights for the time-of-day terms. Swept by `weightTuning.manual.test.ts`. */
+export interface BandWeights {
+  prime: number;
+  afternoon: number;
+}
 
 /** Population variance of a list of counts. */
 const variance = (counts: number[]): number => {
@@ -58,7 +63,14 @@ const daysBetween = (a: string, b: string): number => {
  * the report uses for its floor calculation. This keeps the optimizer's objective
  * and the report's flag condition pointed at the same quantity.
  */
-export const score: ScoreFn = (assignments, slotsById, settings) => {
+/**
+ * Builds a scoring function with the given time-of-day weights.
+ *
+ * Exists so the tuning harness can sweep weights without editing constants — ADR §2.4
+ * already defines scoring as pluggable; this is that seam.
+ */
+export const createScore = (weights: BandWeights = BAND_WEIGHTS): ScoreFn =>
+  (assignments, slotsById, settings) => {
   let total = 0;
 
   const teamIds = [...new Set(assignments.flatMap(a => [a.homeTeamId, a.awayTeamId]))];
@@ -153,8 +165,8 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
 
     // Time-of-day band totals. Uses the same scheduled-teams population as the late
     // terms, so the objective and the report point at the same quantity.
-    total += variance(divTeamIds.map(id => teamPrime.get(id) ?? 0)) * PRIME_BAND_WEIGHT;
-    total += variance(divTeamIds.map(id => teamAfternoon.get(id) ?? 0)) * AFTERNOON_BAND_WEIGHT;
+    total += variance(divTeamIds.map(id => teamPrime.get(id) ?? 0)) * weights.prime;
+    total += variance(divTeamIds.map(id => teamAfternoon.get(id) ?? 0)) * weights.afternoon;
 
     // Weekend variance ×100
     const wCounts = divTeamIds.map(id => teamWeekendGames.get(id) ?? 0);
@@ -201,5 +213,8 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
     }
   }
 
-  return total;
-};
+    return total;
+  };
+
+/** Default scoring function used by {@link generateSchedule}. */
+export const score: ScoreFn = createScore();

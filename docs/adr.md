@@ -365,8 +365,22 @@ The scoring function quantifies "unfairness" as a single number. Lower is better
 | Rest day violation (<2 days) | 25 | Soft constraint. Less than 2 days rest is bad. |
 | Max games/week violation | 10000 | Hard constraint. Massive penalty ensures this is never violated. |
 | **Same-day game (per extra game)** | **5000** | v0.6 *(shipped)*. Above every soft term, below the hard weekly cap. Always on — same-day play is an invariant. Structural blocking (§5.1) does the real work; this penalises the remainder. |
-| Prime-band total variance (per team) | 150 | v0.6 *(shipped; provisional pending Phase 5 tuning)*. Balances each team's total prime-time games; weighted below the late terms — where the two conflict, late fairness wins. Measured on the real season: prime spread fell from 4 (Div A) / 6 (Div B) to 1 / 1. |
-| Afternoon-band total variance (per team) | 150 | v0.6 *(shipped; provisional)*. As above. Afternoon spread fell from 4 / 6 to 2 / 1. |
+| Prime-band total variance (per team) | 150 | v0.6 *(shipped; tuned by measurement)*. Balances each team's total prime-time games, weighted below the late terms so late fairness always wins. |
+| Afternoon-band total variance (per team) | 150 | v0.6 *(shipped; tuned)*. As above. |
+
+> **How 150 was chosen.** Swept against the real season (`weightTuning.manual.test.ts`),
+> holding the late gate at every value:
+>
+> | weight | Div A aft/prime | Div B aft/prime |
+> |---|---|---|
+> | 0 | 6 / 6 | 7 / 8 |
+> | 50 | 2 / 1 | 1 / 1 |
+> | **150** | **0 / 1** | **1 / 1** |
+> | 400–2500 | 2 / 1 | 1 / 1 |
+>
+> 150 is the optimum: Division A reaches perfect afternoon balance and higher weights do
+> not improve on it, they only inflate the score. `lateRigidity.test.ts` asserts these
+> constants so a later edit fails loudly rather than drifting.
 
 > **Band terms are per-band *totals*, not per-individual-slot.** Balancing all ten
 > individual columns was considered and rejected: it adds five competing terms and is the
@@ -492,19 +506,21 @@ function optimizeSchedule(
 
 **Why these parameters?**
 
-* 50,000 iterations: **measured**, not guessed. On a real 236-slot / 16-team season the
-  best score converges at ~50,000 (and is flat out to 200,000). Wall time ~50 s. An
+* 50,000 iterations: **measured**, not guessed. On the real 236-slot / 16-team season the
+  best score converges at 50,000 (~63 s) and larger budgets do not improve on it. An
   earlier synthetic fixture converged at 30,000 and wrongly suggested cutting the budget —
   it had only two distinct start times, where the real file has ten. Re-measure whenever
-  the scoring function changes.
+  the scoring function changes; see `standards.md` §2.1 for the current curve.
 
 * Initial temperature 1000: Matches the scale of our scoring weights.
 
-* Cooling rate 0.9997: fixed, and **independent of the iteration budget** — temperature
-  reaches the `minTemperature` floor at iteration ~30,700 regardless of how many
-  iterations are requested, after which the search is effectively greedy hill-climbing.
-  This is why raising the iteration count alone buys nothing. Left as-is because the
-  measured convergence point sits just above that floor; revisit only if the budget changes.
+* Cooling rate: **derived from the iteration budget** as `exp(ln(minT / T0) / iterations)`,
+  so the temperature reaches its floor at the last step whatever the budget. It was
+  previously a fixed 0.9997, which floored at iteration ~30,700 regardless — meaning 39%
+  of a 50,000-iteration run was greedy hill-climbing and raising the count bought almost
+  nothing. Making it budget-relative improved the score ~10% at the same 50,000 setting,
+  and established that the iteration count is *not* the binding constraint: the search has
+  converged, and larger budgets do not help.
 
 ## **5.4 Phase 4: Home/Away Assignment**
 

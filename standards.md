@@ -68,20 +68,33 @@ are the automated gates.
 
 ### 2.1 Performance budget
 
-Measured against a real season file (236 slots, 16 teams, 8 per division):
+Measured against the real season fixture (236 slots, 16 teams, 8 per division) with
+the full v0.6 objective and budget-relative cooling:
 
 | Iterations | Best score | Wall time |
 |-----------:|-----------:|----------:|
-| 20,000 | 3569 | 21s |
-| 30,000 | 3469 | 30s |
-| **50,000** | **3394** | **49s** |
-| 200,000 | 3394 | 193s |
+| 5,000 | 27,934 | 7s |
+| 10,000 | 11,584 | 13s |
+| 20,000 | 6,309 | 25s |
+| 30,000 | 1,259 | 38s |
+| **50,000** | **1,172** | **63s** |
+| 100,000 | 1,209 | 125s |
+| 200,000 | 1,209 | 249s |
 
-The simulated-annealing pass converges at the shipped 50,000-iteration setting;
-150,000 further iterations yield no improvement. Generation time is therefore ~50s
-for a full season, and the budget is set at 90s to leave headroom for slower
-hardware. Fairness is valued above speed here — a once-a-season wait of under a
-minute is acceptable, and the iteration count is not to be cut without re-measuring.
+Convergence lands at the shipped 50,000-iteration setting. Larger budgets do **not**
+improve on it — 100k and 200k both come out marginally worse, since a longer run
+spends proportionally more time exploring and lands in a different local optimum.
+
+This was re-measured after making the cooling rate budget-relative. Previously it
+was a fixed 0.9997 that reached the temperature floor at iteration ~30,700 no matter
+how many iterations were requested, so 39% of a 50k run was greedy hill-climbing.
+Tying it to the budget improved the score at the same setting by ~10% (1,297 → 1,172
+on a fixed seed) — but it also disproved the hypothesis that the iteration count was
+the binding constraint. It is not; the search has genuinely converged.
+
+Generation is therefore ~63s for a full season against a 90s budget. Fairness is
+valued above speed here, and the iteration count is not to be cut without
+re-measuring.
 
 Do **not** tune this against synthetic fixtures. A synthetic 16-team / 320-slot
 league converged at 30,000 and suggested cutting the budget; it had two distinct

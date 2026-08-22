@@ -63,6 +63,7 @@ const checkFeasibility = (
   teamCounts: Record<DivisionId, number>,
   eligible: DivisionId[],
   totalSlots: number,
+  largestDate: number,
 ): FeasibilityResult => {
   const totalTeams = eligible.reduce((sum, d) => sum + teamCounts[d], 0);
   const targetPerTeam = totalTeams > 0 ? (2 * totalSlots) / totalTeams : 0;
@@ -84,11 +85,14 @@ const checkFeasibility = (
   // as "doesn't split evenly" would misdescribe it.
   const parts: string[] = [];
   if (dropped > 0) {
-    const teamsNeeded = Math.max(...eligible.map(d => teamCounts[d])) + 2;
+    // Derived from the worst date, not from team counts: capacity is `floor(teams / 2)` per
+    // division, so covering a date of `n` slots across two divisions needs `n` teams total.
+    const teamsNeeded = eligible.length > 1 ? Math.ceil(largestDate / 2) : largestDate;
     parts.push(
-      `${dropped} of your ${totalSlots} ice slots can't be used — some dates have more ` +
-      `slots than your teams can fill without a team playing twice in one day. ` +
-      `Adding teams (about ${teamsNeeded} per division) or removing those slots would fix it.`,
+      `${dropped} of your ${totalSlots} ice slots can't be used — your busiest date has ` +
+      `${largestDate} slots, more than your teams can fill without someone playing twice ` +
+      `in one day. About ${teamsNeeded} teams per division would cover it, or you could ` +
+      `remove the extra slots.`,
     );
   }
   if (offenders.length > 0) {
@@ -235,6 +239,12 @@ export const assignDays = (
 
   return {
     slots: assignedSlots,
-    feasibility: checkFeasibility(assignedSlots, teamCounts, eligible, slots.length),
+    feasibility: checkFeasibility(
+      assignedSlots,
+      teamCounts,
+      eligible,
+      slots.length,
+      Math.max(0, ...[...byDate.values()].map(d => d.length)),
+    ),
   };
 };

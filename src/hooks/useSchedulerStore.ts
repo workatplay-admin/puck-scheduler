@@ -127,14 +127,12 @@ export const useSchedulerStore = () => {
    */
   const setIceSlots = useCallback((slots: IceSlot[]) => {
     const slotIds = new Set(slots.map(s => s.id));
+    // No storage writes in here: React may invoke an updater more than once (StrictMode
+    // double-invocation) and does so before the state is committed. The `schedule` and
+    // `unusedSlots` effects persist the cleared values immediately afterwards anyway.
     setState(prev => {
       const orphaned =
         prev.schedule !== null && prev.schedule.games.some(g => !slotIds.has(g.slotId));
-
-      if (orphaned) {
-        scheduleWrite(STORAGE_SCHEDULE_KEY, null);
-        scheduleWrite(STORAGE_UNUSED_KEY, null);
-      }
 
       return {
         ...prev,
