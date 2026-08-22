@@ -26,6 +26,13 @@ export interface Schedule {
   fairnessScore: number;
   hasInvariantViolations?: boolean;
   violationSummary?: string;
+  /**
+   * Advisory note from day assignment — e.g. the slot/team mix cannot give every
+   * division the same games-per-team. Distinct from `hasInvariantViolations`, which
+   * means the *produced* schedule breaks a hard invariant. A warning never blocks
+   * generation and never yields an empty schedule.
+   */
+  feasibilityWarning?: string;
 }
 
 export interface SchedulerSettings {

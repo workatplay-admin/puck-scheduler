@@ -59,9 +59,9 @@ const checkInvariants = (games: Game[], teams: Team[]): string | null => {
  * generation → simulated-annealing slot optimisation → seeded home/away
  * assignment → post-run invariant checks with up to 3 retries.
  *
- * Returns early with an empty schedule when neither division has at least
- * two teams. On feasibility failure (slot/team imbalance) returns immediately
- * with `hasInvariantViolations: true` and a `violationSummary`.
+ * Returns an empty schedule only when neither division has at least two teams — there
+ * is nothing to schedule. A feasibility failure (slot/team imbalance) is advisory: the
+ * schedule is still produced and carries a `feasibilityWarning`.
  *
  * @param iceSlots - Available ice slots for the season.
  * @param teams    - All registered teams (any mix of divisions A and B).
@@ -97,19 +97,10 @@ export const generateSchedule = (
 
     const { slots: slotsByDiv, feasibility } = assignDays(iceSlots, teams, settings, rng);
 
-    if (!feasibility.ok) {
-      return {
-        schedule: {
-          games: [],
-          seed,
-          generatedAt: new Date().toISOString(),
-          fairnessScore: 0,
-          hasInvariantViolations: true,
-          violationSummary: feasibility.reason,
-        },
-        unusedSlots: iceSlots,
-      };
-    }
+    // A feasibility failure is advisory, never fatal. Returning early here would hand the
+    // user an empty schedule for any slot/team mix that cannot hit an exact games-per-team
+    // split — which is a warning worth showing, not a reason to produce nothing.
+    const feasibilityWarning = feasibility.ok ? undefined : feasibility.reason;
 
     const matchups = buildMatchups(
       { A: divisionATeams, B: divisionBTeams },
@@ -117,7 +108,13 @@ export const generateSchedule = (
       rng
     );
 
-    const { assignments, unusedSlots } = assignSlots(matchups, slotsByDiv, settings, score, rng, opts?.saIterations, opts?.onProgress);
+    const { assignments, unusedSlots: unfilled } = assignSlots(matchups, slotsByDiv, settings, score, rng, opts?.saIterations, opts?.onProgress);
+
+    // Slot conservation. Where day-assignment could not place a slot — only reachable
+    // with a misconfigured roster, e.g. a date exceeding both divisions' per-date
+    // capacity — it surfaces in the Unused Slots panel rather than disappearing.
+    const placed = new Set([...slotsByDiv.A, ...slotsByDiv.B].map(s => s.id));
+    const unusedSlots = [...unfilled, ...iceSlots.filter(s => !placed.has(s.id))];
     const games = assignHomeAway(assignments, rng);
 
     games.sort((a, b) => {
@@ -138,6 +135,7 @@ export const generateSchedule = (
       fairnessScore,
       hasInvariantViolations: violation !== null,
       violationSummary: violation ?? undefined,
+      feasibilityWarning,
     };
 
     const isBetter =
@@ -151,6 +149,11 @@ export const generateSchedule = (
     }
 
     if (!violation) break;
+
+    // Retrying cannot help when day assignment is the cause: it is deterministic, so
+    // every attempt produces the identical slot split. Without this, an infeasible mix
+    // burns three full SA runs to arrive at the same answer.
+    if (!feasibility.ok) break;
   }
 
   return bestResult!;

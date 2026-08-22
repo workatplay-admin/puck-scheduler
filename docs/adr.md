@@ -155,8 +155,7 @@ This is the heart of the application. The algorithm runs in four phases, each bu
 
 ## **5.1 Phase 1: Slot-Block Assignment**
 
-> **v0.6 — PLANNED, not yet implemented** (see `docs/v0.6-fairness-plan.md` Phase 2).
-> This phase previously assigned whole *dates* to divisions. It now
+> **v0.6 — shipped** (DAV-201/202/203). This phase previously assigned whole *dates* to divisions. It now
 > assigns **contiguous slot blocks**, because whole-date assignment structurally forces
 > same-day double-headers. A date carrying 6 slots handed to an 8-team division yields
 > 12 team-appearances over 8 teams — by pigeonhole at least 4 teams must play twice,
@@ -209,8 +208,8 @@ Assign each calendar date (with all its ice slots) to exactly one division. **Pr
 
 1. **Compute targets.** `total_team_games = 2 × total_slots`; `target_per_team = total_team_games / total_teams` (a real number). For each division `d`, `target_slots[d] = round(team_count[d] × total_slots / total_teams)`. If `sum(target_slots) ≠ total_slots` after rounding, nudge the largest target up or down by 1 so the budgets sum exactly.
 2. **Group and sort.** Group slots by date. Sort dates by `(slot_count_on_date desc, date asc)` — large-impact dates first so they can't push a division past its budget later.
-3. **Greedy assign.** For each date in sorted order, assign it to the division with the largest remaining budget (`target_slots[d] − assigned_slots_so_far[d]`). On ties, prefer the division that more needs the resources on that date (Friday/Saturday/late counts). On further ties, alternate A/B.
-4. **Feasibility check.** After assignment, verify `floor(target_per_team) ≤ games_per_team[d] ≤ ceil(target_per_team)` for every division. If not, return `{ ok: false, reason }` to the caller (which surfaces a warning in the Ice Times tab); otherwise return `{ ok: true }` alongside the date→division map. *(**Planned** for v0.6 — not yet implemented. The shipped check is far weaker: it only catches a division receiving zero slots, so the Ice Times warning almost never fires. Critically, the v0.6 implementation must be **warning-only** — `generateSchedule` currently returns an empty schedule on `!feasibility.ok`, so tightening the check without changing that would make currently-generable seasons produce no games at all.)* The post-run invariant in `scheduler/index.ts` is the final backstop if SA produces a violating schedule despite a feasible allocation.
+3. **Greedy assign.** For each date in sorted order, assign it to the division with the largest remaining budget (`target_slots[d] − assigned_slots_so_far[d]`). *(v0.6: the Friday/Saturday/late tiebreakers described here were removed. Block assignment is fully deterministic and ignores `settings`; cross-division balance of late or weekend ice is no longer a goal — see PRD §3.2.1 rule 3, since there is no cross-division play. Where the budget-leading division cannot host a date whole, the date is **split** rather than reassigned.)*
+4. **Feasibility check.** After assignment, verify `floor(target_per_team) ≤ games_per_team[d] ≤ ceil(target_per_team)` for every division. If not, return `{ ok: false, reason }` to the caller (which surfaces a warning in the Ice Times tab); otherwise return `{ ok: true }` alongside the date→division map. *(**Shipped in v0.6.** The check is deliberately **warning-only**: `generateSchedule` no longer returns early on `!feasibility.ok`, because doing so handed the user an empty schedule for any mix that could not split evenly. The reason is returned as structured numbers — `gamesPerTeam` and `allowedRange` — so the UI phrases its own sentence, and is surfaced on both the Ice Times and Teams tabs.)* The post-run invariant in `scheduler/index.ts` is the final backstop if SA produces a violating schedule despite a feasible allocation.
 
 **Pseudo-code:**
 

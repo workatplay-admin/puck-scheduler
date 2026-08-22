@@ -96,6 +96,9 @@ const Index = () => {
         store.setSchedule(msg.schedule, msg.unusedSlots);
         store.setCurrentTab(2);
         toast.success(`Schedule generated with ${msg.schedule.games.length} games!`);
+        if (msg.schedule.feasibilityWarning) {
+          toast.warning(msg.schedule.feasibilityWarning, { duration: 10_000 });
+        }
         setIsGenerating(false);
         setGenProgress(null);
         workerRef.current = null;
@@ -255,6 +258,8 @@ const Index = () => {
         {store.currentTab === 1 && (
           <TeamsTab
             teams={store.teams}
+            iceSlots={store.iceSlots}
+            settings={store.settings}
             scheduleExists={canAccessSchedule}
             onAddTeam={store.addTeam}
             onRemoveTeam={store.removeTeam}

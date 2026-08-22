@@ -16,10 +16,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Team } from '@/types/scheduler';
+import type { IceSlot, SchedulerSettings } from '@/types/scheduler';
 import { TeamRow } from '@/components/TeamRow';
+import { FeasibilityWarning } from '@/components/FeasibilityWarning';
 
 interface TeamsTabProps {
   teams: Team[];
+  iceSlots: IceSlot[];
+  settings: SchedulerSettings;
   /** True once a schedule exists: the roster is frozen until it is cleared. */
   scheduleExists?: boolean;
   onAddTeam: (team: Team) => void;
@@ -32,8 +36,8 @@ interface TeamsTabProps {
 }
 
 export const TeamsTab = ({
-  teams, scheduleExists = false, onAddTeam, onRemoveTeam, onRenameTeam,
-  onClearSchedule, onBack, onGenerate,
+  teams, iceSlots, settings, scheduleExists = false, onAddTeam, onRemoveTeam,
+  onRenameTeam, onClearSchedule, onBack, onGenerate,
 }: TeamsTabProps) => {
   const [teamName, setTeamName] = useState('');
   const [division, setDivision] = useState<'A' | 'B'>('A');
@@ -243,6 +247,8 @@ export const TeamsTab = ({
           </CardContent>
         </Card>
       )}
+
+      <FeasibilityWarning iceSlots={iceSlots} teams={teams} settings={settings} />
 
       {/* Actions */}
       <div className="flex justify-between">

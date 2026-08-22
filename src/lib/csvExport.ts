@@ -8,17 +8,25 @@ import { formatDate, formatTime } from './csvParser';
  * quote-free.
  *
  * Also neutralises spreadsheet formula injection. Team names are free text, and a name
- * beginning `=`, `+`, `-` or `@` is evaluated as a formula by Excel and Google Sheets on
- * open. Quoting alone does not help — the spreadsheet evaluates the field's *decoded*
- * content — so such values are prefixed with an apostrophe, which both applications treat
- * as "the rest of this cell is literal text".
+ * beginning `=`, `@` or a signed expression is evaluated as a formula by Excel and Google
+ * Sheets on open. Quoting alone does not help — the spreadsheet evaluates the field's
+ * *decoded* content — so such values are prefixed with an apostrophe, which both
+ * applications treat as "the rest of this cell is literal text".
+ *
+ * A plain signed number is deliberately left alone: the exporter formats Late Surplus as
+ * `+2`, and prefixing that would put a stray apostrophe in every cell of the column for
+ * any non-spreadsheet consumer, to guard against a value that cannot execute anything.
  *
  * @param value - Raw cell value.
  * @returns The field, escaped and quoted only if required.
  */
+const SIGNED_NUMBER = /^[+-][\d.,]*\d$/;
+const looksExecutable = (s: string): boolean =>
+  /^[=@\t\r]/.test(s) || (/^[+-]/.test(s) && !SIGNED_NUMBER.test(s));
+
 const csvCell = (value: string | number): string => {
   const raw = String(value);
-  const s = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  const s = looksExecutable(raw) ? `'${raw}` : raw;
   return /["\r\n,]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 

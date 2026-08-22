@@ -97,9 +97,22 @@ describe('csvExport — spreadsheet formula injection', () => {
     expect(csv).toContain(`"'=HYPERLINK(""http://evil"",""click"")"`);
   });
 
-  it.each(['=1+1', '+1', '-1', '@SUM(1)'])('neutralises a name starting with %s', (name) => {
-    const csv = exportWith([name, 'Jets', 'Wolves', 'Bears']);
-    expect(csv).toContain(`'${name}`);
+  it.each(['=1+1', '@SUM(1)', '-2+3+cmd|calc', '+HYPERLINK(1)'])(
+    'neutralises a name starting with %s',
+    (name) => {
+      const csv = exportWith([name, 'Jets', 'Wolves', 'Bears']);
+      expect(csv).toContain(`'${name}`);
+    },
+  );
+
+  it('leaves the exporter\'s own signed numbers alone', () => {
+    // Late Surplus is formatted as "+2". Prefixing it would put a stray apostrophe in
+    // every cell of that column for any non-spreadsheet consumer, to guard a value that
+    // cannot execute anything.
+    const csv = exportWith(PLAIN);
+    const block = sections(csv).find(b => b[0] === 'LATE SLOT FAIRNESS SUMMARY')!;
+    expect(block.slice(2).join('\n')).not.toContain("'+");
+    expect(block.slice(2).join('\n')).toMatch(/,\+\d+,/);
   });
 
   it('leaves ordinary names unprefixed', () => {

@@ -18,7 +18,9 @@ self.onmessage = (e: MessageEvent<WorkerInit>) => {
       self.postMessage({
         type: 'error',
         code: 'invariant_failed',
-        message: schedule.violationSummary ?? 'Could not produce a valid schedule — try adjusting your ice slots or teams.',
+        message: [schedule.feasibilityWarning, schedule.violationSummary]
+          .filter(Boolean)
+          .join(' ') || 'Could not produce a valid schedule — try adjusting your ice slots or teams.',
         lastBestSchedule: schedule,
         unusedSlots,
       } satisfies WorkerMsg);

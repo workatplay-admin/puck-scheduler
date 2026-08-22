@@ -4,7 +4,8 @@ import '@testing-library/jest-dom/vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TeamsTab } from '../TeamsTab';
-import type { Team } from '@/types/scheduler';
+import type { IceSlot, Team } from '@/types/scheduler';
+import { DEFAULT_SETTINGS } from '@/types/scheduler';
 
 const TEAMS: Team[] = [
   { id: 't0', name: 'Sharks', division: 'A' },
@@ -13,9 +14,19 @@ const TEAMS: Team[] = [
   { id: 't3', name: 'Bears', division: 'B' },
 ];
 
-const setup = (scheduleExists: boolean) => {
+/** A feasible 4-slot / 4-team season, so the feasibility banner stays quiet by default. */
+const SLOTS: IceSlot[] = Array.from({ length: 4 }, (_, i) => ({
+  id: `s${i}`,
+  date: `2026-01-0${i + 1}`,
+  startTime: '19:00',
+  dayOfWeek: 'Monday',
+}));
+
+const setup = (scheduleExists: boolean, iceSlots: IceSlot[] = SLOTS) => {
   const props = {
     teams: TEAMS,
+    iceSlots,
+    settings: DEFAULT_SETTINGS,
     scheduleExists,
     onAddTeam: vi.fn(),
     onRemoveTeam: vi.fn(),
@@ -118,5 +129,27 @@ describe('TeamsTab — rename', () => {
     await user.type(input, 'jets{Enter}');
     expect(onRenameTeam).not.toHaveBeenCalled();
     expect(screen.getByText(/already exists/i)).toBeInTheDocument();
+  });
+});
+
+describe('TeamsTab — feasibility banner', () => {
+  it('stays quiet when the slot/team mix is balanced', () => {
+    setup(false);
+    expect(screen.queryByText(/don't split evenly/i)).not.toBeInTheDocument();
+  });
+
+  it('warns above Generate when the mix is lopsided', () => {
+    // One 8-slot date against 2v2 teams: each division can host only one game per date,
+    // so most of the ice is unplaceable and games-per-team falls outside the allowed band.
+    const crowded: IceSlot[] = Array.from({ length: 8 }, (_, i) => ({
+      id: `c${i}`,
+      date: '2026-02-01',
+      startTime: `${13 + i}:00`,
+      dayOfWeek: 'Sunday',
+    }));
+    setup(false, crowded);
+    expect(screen.getByText(/don't split evenly/i)).toBeInTheDocument();
+    // Advisory only: generation stays available.
+    expect(screen.getByRole('button', { name: /generate schedule/i })).toBeEnabled();
   });
 });
