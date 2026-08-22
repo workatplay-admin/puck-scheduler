@@ -29,7 +29,24 @@ export interface GameAssignment {
  */
 export interface DayAssignmentResult {
   slots: SlotsByDivision;
-  feasibility: { ok: true } | { ok: false; reason: string };
+  feasibility: FeasibilityResult;
+}
+
+/**
+ * Outcome of the ADR §5.1 step-4 check: every division's games-per-team must land in
+ * `[floor(2S/T), ceil(2S/T)]`.
+ *
+ * Deliberately structured rather than a pre-baked sentence — the UI interpolates the
+ * numbers into its own copy. A failure is **advisory**: generation still proceeds.
+ */
+export interface FeasibilityResult {
+  ok: boolean;
+  /** Games per team each division would receive, keyed by division. */
+  gamesPerTeam: Record<DivisionId, number>;
+  /** Inclusive `[floor, ceil]` range every division should fall within. */
+  allowedRange: [number, number];
+  /** Present only when `ok` is false. Plain-language, safe to show directly. */
+  reason?: string;
 }
 
 /**

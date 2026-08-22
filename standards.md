@@ -23,7 +23,7 @@
 |---------|------------|---------|
 | Components | PascalCase | `ScheduleTab.tsx` |
 | Hooks | camelCase, `use` prefix | `useSchedulerStore.ts` |
-| Utilities | camelCase | `scheduleGenerator.ts` |
+| Utilities | camelCase | `csvExport.ts` |
 | Types/Interfaces | PascalCase | `interface Team {}` |
 | Constants | SCREAMING_SNAKE | `const MAX_ROUNDS = 20` |
 | Environment vars | SCREAMING_SNAKE | `VITE_API_URL` |
@@ -32,12 +32,12 @@
 
 - Max **500 lines** per file — split if larger.
 - One component per file.
-- Pure logic in `src/lib/`, UI in `src/components/`, state in `src/hooks/`.
+- Pure logic in `src/scheduler/` (scheduling) and `src/parsers/` (file ingest); shared helpers in `src/lib/`; UI in `src/components/`; state in `src/hooks/`.
 - Domain types live in `src/types/scheduler.ts`.
 
 ### 1.4 Documentation
 
-- JSDoc on exported functions in `src/lib/` (the scheduling/CSV logic that other modules depend on).
+- JSDoc on exported functions in `src/scheduler/`, `src/parsers/`, and `src/lib/` (the logic other modules depend on).
 - Inline comments only for non-obvious algorithmic choices (e.g., why a particular pairing heuristic is used).
 - Significant architectural changes get an ADR in `docs/`.
 
@@ -47,21 +47,59 @@
 |----------|----------|
 | Correctness | Schedule fairness invariants hold; CSV round-trips losslessly |
 | Security | No secrets committed; user-supplied CSV/text sanitized before render |
-| Performance | Schedule generation completes in <1s for typical league sizes |
+| Performance | Schedule generation completes in under 90s for a full season (~236 slots, 16 teams); see §2.1 |
 | Type safety | No `any`; Zod at boundaries |
 
 ---
 
 ## 2. Testing
 
-No test runner is configured yet. When tests are introduced:
+**Vitest** is configured (`vitest.config.ts`). Run the suite with `npx vitest run`
+— there is deliberately no `npm test` alias yet.
 
-- **Vitest** for unit tests (pairs naturally with Vite).
-- **Playwright** for E2E once flows stabilize.
-- Pure functions in `src/lib/` are the priority targets — `scheduleGenerator`, `csvParser`, `csvExport`.
+- Pure functions are the priority targets: `src/scheduler/`, `src/parsers/`, `src/lib/`.
+- Scheduler correctness is guarded by hard-invariant tests (per-pair and per-team
+  game-count spread ≤ 1) rather than snapshots, since output is seed-dependent.
+- **Playwright** for E2E once flows stabilize — still not adopted.
 - Write tests alongside code, not after.
 
-Until then, `npm run audit:standards` and `npm run lint` are the automated gates.
+`npm run lint`, `npm run build`, `npx vitest run`, and `npm run audit:standards`
+are the automated gates.
+
+### 2.1 Performance budget
+
+Measured against the real season fixture (236 slots, 16 teams, 8 per division) with
+the full v0.6 objective and budget-relative cooling:
+
+| Iterations | Best score | Wall time |
+|-----------:|-----------:|----------:|
+| 5,000 | 27,934 | 7s |
+| 10,000 | 11,584 | 13s |
+| 20,000 | 6,309 | 25s |
+| 30,000 | 1,259 | 38s |
+| **50,000** | **1,172** | **63s** |
+| 100,000 | 1,209 | 125s |
+| 200,000 | 1,209 | 249s |
+
+Convergence lands at the shipped 50,000-iteration setting. Larger budgets do **not**
+improve on it — 100k and 200k both come out marginally worse, since a longer run
+spends proportionally more time exploring and lands in a different local optimum.
+
+This was re-measured after making the cooling rate budget-relative. Previously it
+was a fixed 0.9997 that reached the temperature floor at iteration ~30,700 no matter
+how many iterations were requested, so 39% of a 50k run was greedy hill-climbing.
+Tying it to the budget improved the score at the same setting by ~10% (1,297 → 1,172
+on a fixed seed) — but it also disproved the hypothesis that the iteration count was
+the binding constraint. It is not; the search has genuinely converged.
+
+Generation is therefore ~63s for a full season against a 90s budget. Fairness is
+valued above speed here, and the iteration count is not to be cut without
+re-measuring.
+
+Do **not** tune this against synthetic fixtures. A synthetic 16-team / 320-slot
+league converged at 30,000 and suggested cutting the budget; it had two distinct
+start times where the real file has ten. Re-measure against real data whenever the
+scoring function changes (see `docs/v0.6-fairness-plan.md` Phase 5).
 
 ---
 

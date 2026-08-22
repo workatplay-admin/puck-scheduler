@@ -100,11 +100,16 @@ describe('post-run invariants', () => {
     expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   });
 
-  it('feasibility failure returns hasInvariantViolations:true without throwing', () => {
-    // 1 slot + 4A/2B teams: target_B = 0 → feasibility failure
-    const tinySlots: IceSlot[] = [
-      { id: 's1', date: '2026-01-09', startTime: '19:00', dayOfWeek: 'Friday' },
-    ];
+  it('feasibility failure still produces a schedule, flagged as a warning', () => {
+    // One 8-slot date against 4A/2B teams. Per-date capacity is floor(4/2) + floor(2/2)
+    // = 3, so five slots cannot be placed without forcing same-day games, and every team
+    // lands well below the [2, 3] games-per-team band the ADR requires.
+    const tinySlots: IceSlot[] = Array.from({ length: 8 }, (_, i) => ({
+      id: `s${i}`,
+      date: '2026-01-09',
+      startTime: `${17 + i}:00`,
+      dayOfWeek: 'Friday',
+    }));
     const manyTeams: Team[] = [
       { id: 't1', name: 'A1', division: 'A' },
       { id: 't2', name: 'A2', division: 'A' },
@@ -113,8 +118,15 @@ describe('post-run invariants', () => {
       { id: 't5', name: 'B1', division: 'B' },
       { id: 't6', name: 'B2', division: 'B' },
     ];
-    const { schedule } = generateSchedule(tinySlots, manyTeams, SETTINGS, { saIterations: 10 });
-    expect(schedule.hasInvariantViolations).toBe(true);
-    expect(typeof schedule.violationSummary).toBe('string');
+    const { schedule, unusedSlots } = generateSchedule(tinySlots, manyTeams, SETTINGS, { saIterations: 10 });
+
+    // v0.6: a feasibility failure is advisory. Returning an empty schedule here used to
+    // strand the user with nothing generated, so the contract is now "generate anyway,
+    // and say why it is lopsided".
+    expect(schedule.games.length).toBeGreaterThan(0);
+    expect(typeof schedule.feasibilityWarning).toBe('string');
+    expect(schedule.hasInvariantViolations).toBeFalsy();
+    // Unplaceable slots surface for manual assignment rather than disappearing.
+    expect(unusedSlots.length).toBeGreaterThan(0);
   });
 });

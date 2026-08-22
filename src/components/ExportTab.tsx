@@ -23,7 +23,22 @@ export const ExportTab = ({ schedule, slotsById, fairnessReport, onExport, onBac
     ? `${formatDate(allDates[0])} - ${formatDate(allDates[allDates.length - 1])}`
     : '';
 
-  const flaggedTeams = fairnessReport?.teamStats.filter(t => t.lateSlotFlagged || t.weekendFlagged) || [];
+  const flaggedTeams = fairnessReport?.teamStats.filter(
+    t => t.lateSlotFlagged || t.weekendFlagged || t.sameDayDates.length > 0,
+  ) || [];
+
+  // Derived from the report rather than hardcoded, so the list cannot drift from what the
+  // file actually contains.
+  const exportContents = [
+    'Complete schedule with Date, Day, Start Time, Division, Home Team, Away Team',
+    'Games Per Team summary',
+    'Time of Day summary (afternoon / prime / late)',
+    'Time Slot Distribution (all time slots)',
+    'Late Slot Fairness Summary with flags',
+    ...(fairnessReport?.hasWeekendIce ? ['Friday & Saturday Games count'] : []),
+    'Day-of-Week Distribution, including same-day games',
+    'Division Balance Summary',
+  ];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -81,15 +96,7 @@ export const ExportTab = ({ schedule, slotsById, fairnessReport, onExport, onBac
         </CardHeader>
         <CardContent>
           <ul className="space-y-3">
-            {[
-              'Complete schedule with Date, Day, Start Time, Division, Home Team, Away Team',
-              'Games Per Team summary',
-              'Time Slot Distribution (all time slots)',
-              'Late Slot Fairness Summary with flags',
-              'Friday & Saturday Games count',
-              'Day-of-Week Distribution',
-              'Division Balance Summary',
-            ].map((item, i) => (
+            {exportContents.map((item, i) => (
               <li key={i} className="flex items-start gap-3">
                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-success/20 text-success flex items-center justify-center text-xs font-semibold">
                   ✓

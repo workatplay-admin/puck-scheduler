@@ -1,6 +1,38 @@
-import { isDerivedLate, isDerivedWeekend } from '@/types/scheduler';
+import { bandOf, isDerivedLate, isDerivedWeekend } from '@/types/scheduler';
 import type { IceSlot } from '@/types/scheduler';
 import type { GameAssignment, ScoreFn } from './types';
+
+/**
+ * Cost of one extra game for the same team on the same date. Above every soft term but
+ * below the 10000 `maxGamesPerWeek` hard constraint: playing twice in a day is never
+ * acceptable, but it must not outrank the weekly cap.
+ */
+const SAME_DAY_PENALTY = 5000;
+
+/**
+ * Weights for balancing each team's **total** prime and afternoon games across its
+ * division. Deliberately an order of magnitude below the late terms: where the two
+ * conflict, late fairness wins.
+ *
+ * Per-band totals rather than per-individual-slot — balancing all ten columns separately
+ * adds five competing terms and is the likeliest to fight the rigid late constraint.
+ *
+ * Provisional. Tuned by measurement in plan Phase 5 (DAV-213).
+ */
+export const BAND_WEIGHTS = { prime: 150, afternoon: 150 } as const;
+
+/** Weights for the time-of-day terms. Swept by `weightTuning.manual.test.ts`. */
+export interface BandWeights {
+  prime: number;
+  afternoon: number;
+}
+
+/** Population variance of a list of counts. */
+const variance = (counts: number[]): number => {
+  if (counts.length === 0) return 0;
+  const mean = counts.reduce((sum, c) => sum + c, 0) / counts.length;
+  return counts.reduce((sum, c) => sum + (c - mean) ** 2, 0) / counts.length;
+};
 
 const weekOf = (dateStr: string): number => {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -22,6 +54,8 @@ const daysBetween = (a: string, b: string): number => {
  * - Weekend-game variance across teams, ×100
  * - Consecutive-week same-opponent pairings, ×50 each
  * - Rest-day violations (< 2 days between games), ×25 each
+ * - Prime-band and afternoon-band totals per team, ×150 each — time-of-day fairness
+ * - Extra same-day games per team, ×5000 each — never permitted (PRD §3.2.3)
  * - `maxGamesPerWeek` excess games per team-week, ×10000 each
  *
  * Population alignment: all three late-slot terms are computed over scheduled
@@ -29,7 +63,14 @@ const daysBetween = (a: string, b: string): number => {
  * the report uses for its floor calculation. This keeps the optimizer's objective
  * and the report's flag condition pointed at the same quantity.
  */
-export const score: ScoreFn = (assignments, slotsById, settings) => {
+/**
+ * Builds a scoring function with the given time-of-day weights.
+ *
+ * Exists so the tuning harness can sweep weights without editing constants — ADR §2.4
+ * already defines scoring as pluggable; this is that seam.
+ */
+export const createScore = (weights: BandWeights = BAND_WEIGHTS): ScoreFn =>
+  (assignments, slotsById, settings) => {
   let total = 0;
 
   const teamIds = [...new Set(assignments.flatMap(a => [a.homeTeamId, a.awayTeamId]))];
@@ -38,6 +79,9 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
   const teamWeekendGames = new Map<string, number>();
   const teamWeeklyGames = new Map<string, Map<number, number>>();
   const teamGameDates = new Map<string, string[]>();
+  const teamDateCounts = new Map<string, Map<string, number>>();
+  const teamPrime = new Map<string, number>();
+  const teamAfternoon = new Map<string, number>();
   const teamOppByWeek = new Map<string, Map<number, string[]>>();
 
   for (const id of teamIds) {
@@ -45,6 +89,9 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
     teamWeekendGames.set(id, 0);
     teamWeeklyGames.set(id, new Map());
     teamGameDates.set(id, []);
+    teamDateCounts.set(id, new Map());
+    teamPrime.set(id, 0);
+    teamAfternoon.set(id, 0);
     teamOppByWeek.set(id, new Map());
   }
 
@@ -64,6 +111,11 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
       const wm = teamWeeklyGames.get(teamId)!;
       wm.set(week, (wm.get(week) ?? 0) + 1);
       teamGameDates.get(teamId)!.push(slot.date);
+      const dc = teamDateCounts.get(teamId)!;
+      dc.set(slot.date, (dc.get(slot.date) ?? 0) + 1);
+      const band = bandOf(slot, settings);
+      if (band === 'prime') teamPrime.set(teamId, (teamPrime.get(teamId) ?? 0) + 1);
+      else if (band === 'afternoon') teamAfternoon.set(teamId, (teamAfternoon.get(teamId) ?? 0) + 1);
       const owm = teamOppByWeek.get(teamId)!;
       const opps = owm.get(week) ?? [];
       opps.push(oppId);
@@ -107,9 +159,14 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
     for (const lateSlot of lateSlots) {
       const counts = divTeamIds.map(id => teamLateGames.get(id)?.get(lateSlot) ?? 0);
       const mean = counts.reduce((s, c) => s + c, 0) / counts.length;
-      const variance = counts.reduce((s, c) => s + (c - mean) ** 2, 0) / counts.length;
-      total += variance * 100;
+      const slotVariance = counts.reduce((s, c) => s + (c - mean) ** 2, 0) / counts.length;
+      total += slotVariance * 100;
     }
+
+    // Time-of-day band totals. Uses the same scheduled-teams population as the late
+    // terms, so the objective and the report point at the same quantity.
+    total += variance(divTeamIds.map(id => teamPrime.get(id) ?? 0)) * weights.prime;
+    total += variance(divTeamIds.map(id => teamAfternoon.get(id) ?? 0)) * weights.afternoon;
 
     // Weekend variance ×100
     const wCounts = divTeamIds.map(id => teamWeekendGames.get(id) ?? 0);
@@ -139,6 +196,14 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
     }
   }
 
+  // Same-day games ×5000 per extra game. A triple-header therefore costs twice a
+  // double-header, which is right: it is twice as bad.
+  for (const teamId of teamIds) {
+    for (const [, count] of teamDateCounts.get(teamId)!) {
+      if (count > 1) total += (count - 1) * SAME_DAY_PENALTY;
+    }
+  }
+
   // maxGamesPerWeek excess ×10000
   for (const teamId of teamIds) {
     for (const [, count] of teamWeeklyGames.get(teamId)!) {
@@ -148,5 +213,8 @@ export const score: ScoreFn = (assignments, slotsById, settings) => {
     }
   }
 
-  return total;
-};
+    return total;
+  };
+
+/** Default scoring function used by {@link generateSchedule}. */
+export const score: ScoreFn = createScore();

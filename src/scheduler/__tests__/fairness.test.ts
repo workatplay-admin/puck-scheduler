@@ -160,11 +160,17 @@ describe('fairness — concentration guard (level 2, generation)', () => {
    * convergence fixture rather than weakening the level-1 scoring guarantee.
    */
   it('no team ends up with 100% of its late games on the latest slot', () => {
+    // Six teams, not four: from v0.6 a division can host at most `floor(teams / 2)` games
+    // on one date without someone playing twice, so a 3-slot date needs >= 6 teams. With
+    // four teams the third slot of every date would be dropped as unplaceable and this
+    // fixture would only ever exercise a single late time.
     const teams: Team[] = [
       { id: 't1', name: 'T1', division: 'A' },
       { id: 't2', name: 'T2', division: 'A' },
       { id: 't3', name: 'T3', division: 'A' },
       { id: 't4', name: 'T4', division: 'A' },
+      { id: 't5', name: 'T5', division: 'A' },
+      { id: 't6', name: 'T6', division: 'A' },
     ];
 
     // 8 dates, each with one early + two late slots (20:45 and 21:00).

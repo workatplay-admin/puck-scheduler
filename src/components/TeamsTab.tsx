@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Plus, Trash2, UserCircle } from 'lucide-react';
+import { Users, Plus, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,19 +16,39 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Team } from '@/types/scheduler';
+import type { IceSlot, SchedulerSettings } from '@/types/scheduler';
+import { TeamRow } from '@/components/TeamRow';
+import { FeasibilityWarning } from '@/components/FeasibilityWarning';
 
 interface TeamsTabProps {
   teams: Team[];
+  iceSlots: IceSlot[];
+  settings: SchedulerSettings;
+  /** True once a schedule exists: the roster is frozen until it is cleared. */
+  scheduleExists?: boolean;
   onAddTeam: (team: Team) => void;
   onRemoveTeam: (teamId: string) => void;
+  onRenameTeam: (teamId: string, name: string) => void;
+  /** Discards the schedule while keeping ice times and settings. */
+  onClearSchedule: () => void;
   onBack: () => void;
   onGenerate: () => void;
 }
 
-export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }: TeamsTabProps) => {
+export const TeamsTab = ({
+  teams, iceSlots, settings, scheduleExists = false, onAddTeam, onRemoveTeam,
+  onRenameTeam, onClearSchedule, onBack, onGenerate,
+}: TeamsTabProps) => {
   const [teamName, setTeamName] = useState('');
   const [division, setDivision] = useState<'A' | 'B'>('A');
   const [duplicateTeam, setDuplicateTeam] = useState<string | null>(null);
+  const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
+
+  /** Returns an error message when `name` is taken by a different team, else null. */
+  const validateName = (teamId: string, name: string): string | null =>
+    teams.some(t => t.id !== teamId && t.name.toLowerCase() === name.toLowerCase())
+      ? `A team named "${name}" already exists.`
+      : null;
 
   const divisionATeams = teams.filter(t => t.division === 'A');
   const divisionBTeams = teams.filter(t => t.division === 'B');
@@ -73,6 +93,17 @@ export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }:
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {scheduleExists ? (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <Lock className="w-4 h-4" />
+                Teams are locked while a schedule exists. You can still rename them.
+              </p>
+              <Button variant="outline" onClick={() => setShowUnlockConfirm(true)}>
+                Clear schedule &amp; unlock teams
+              </Button>
+            </div>
+          ) : (
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <Label htmlFor="team-name">Team Name</Label>
@@ -104,6 +135,7 @@ export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }:
               </Button>
             </div>
           </div>
+          )}
         </CardContent>
       </Card>
 
@@ -128,23 +160,16 @@ export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }:
             ) : (
               <ul className="space-y-2">
                 {divisionATeams.map((team) => (
-                  <li
+                  <TeamRow
                     key={team.id}
-                    className="flex items-center justify-between p-3 bg-muted/50 rounded-lg group animate-scale-in"
-                  >
-                    <span className="flex items-center gap-2">
-                      <UserCircle className="w-4 h-4 text-primary" />
-                      {team.name}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onRemoveTeam(team.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </li>
+                    team={team}
+                    locked={scheduleExists}
+                    accentClass="text-primary"
+                    onRemove={onRemoveTeam}
+                    onRename={onRenameTeam}
+                    onRequestUnlock={() => setShowUnlockConfirm(true)}
+                    validateName={validateName}
+                  />
                 ))}
               </ul>
             )}
@@ -175,23 +200,16 @@ export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }:
             ) : (
               <ul className="space-y-2">
                 {divisionBTeams.map((team) => (
-                  <li
+                  <TeamRow
                     key={team.id}
-                    className="flex items-center justify-between p-3 bg-muted/50 rounded-lg group animate-scale-in"
-                  >
-                    <span className="flex items-center gap-2">
-                      <UserCircle className="w-4 h-4 text-accent" />
-                      {team.name}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onRemoveTeam(team.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </li>
+                    team={team}
+                    locked={scheduleExists}
+                    accentClass="text-accent"
+                    onRemove={onRemoveTeam}
+                    onRename={onRenameTeam}
+                    onRequestUnlock={() => setShowUnlockConfirm(true)}
+                    validateName={validateName}
+                  />
                 ))}
               </ul>
             )}
@@ -205,7 +223,7 @@ export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }:
       </div>
 
       {/* Quick Add Suggestions */}
-      {teams.length === 0 && (
+      {teams.length === 0 && !scheduleExists && (
         <Card className="bg-ice/30 border-accent/20">
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground mb-3">Quick start with sample teams:</p>
@@ -230,6 +248,8 @@ export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }:
         </Card>
       )}
 
+      <FeasibilityWarning iceSlots={iceSlots} teams={teams} settings={settings} />
+
       {/* Actions */}
       <div className="flex justify-between">
         <Button variant="outline" onClick={onBack}>
@@ -239,6 +259,25 @@ export const TeamsTab = ({ teams, onAddTeam, onRemoveTeam, onBack, onGenerate }:
           Generate Schedule
         </Button>
       </div>
+
+      {/* Clear schedule & unlock teams */}
+      <AlertDialog open={showUnlockConfirm} onOpenChange={setShowUnlockConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear the current schedule?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This discards the generated schedule and any manual edits. Your ice times,
+              teams and settings are kept. You can generate a new schedule afterwards.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { onClearSchedule(); setShowUnlockConfirm(false); }}>
+              Clear schedule
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Duplicate Name Dialog */}
       <AlertDialog open={duplicateTeam !== null} onOpenChange={() => setDuplicateTeam(null)}>

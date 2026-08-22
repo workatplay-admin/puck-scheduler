@@ -96,6 +96,9 @@ const Index = () => {
         store.setSchedule(msg.schedule, msg.unusedSlots);
         store.setCurrentTab(2);
         toast.success(`Schedule generated with ${msg.schedule.games.length} games!`);
+        if (msg.schedule.feasibilityWarning) {
+          toast.warning(msg.schedule.feasibilityWarning, { duration: 10_000 });
+        }
         setIsGenerating(false);
         setGenProgress(null);
         workerRef.current = null;
@@ -199,7 +202,7 @@ const Index = () => {
                 <Trash2 className="w-4 h-4 mr-2" />
                 Start New
               </Button>
-              <SettingsPanel settings={store.settings} onUpdateSettings={store.updateSettings} />
+              <SettingsPanel settings={store.settings} iceSlots={store.iceSlots} onUpdateSettings={store.updateSettings} />
             </div>
           </div>
         </div>
@@ -255,8 +258,13 @@ const Index = () => {
         {store.currentTab === 1 && (
           <TeamsTab
             teams={store.teams}
+            iceSlots={store.iceSlots}
+            settings={store.settings}
+            scheduleExists={canAccessSchedule}
             onAddTeam={store.addTeam}
             onRemoveTeam={store.removeTeam}
+            onRenameTeam={store.renameTeam}
+            onClearSchedule={store.clearSchedule}
             onBack={() => store.setCurrentTab(0)}
             onGenerate={handleGenerateSchedule}
           />

@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
-import { Upload, FileSpreadsheet, AlertCircle, Check, Clock, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { Upload, FileSpreadsheet, AlertCircle, Check, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { formatTime, formatDate } from '@/lib/csvParser';
 import { parseIceSlotsCSV } from '@/parsers/csvParser';
 import { parseIceSlotsExcel } from '@/parsers/excelParser';
-import { assignDays } from '@/scheduler/dayAssignment';
+import { FeasibilityWarning } from '@/components/FeasibilityWarning';
 import { IceSlot, SchedulerSettings, isDerivedLate, isDerivedWeekend } from '@/types/scheduler';
 import type { Team } from '@/types/scheduler';
 
@@ -71,15 +71,6 @@ export const IceTimesTab = ({ iceSlots, settings, teams = [], onSlotsChange, onN
   const dateRange = uniqueDates.length > 0
     ? `${formatDate(uniqueDates[0])} - ${formatDate(uniqueDates[uniqueDates.length - 1])}`
     : '';
-
-  // Feasibility check (DAV-52): run assignDays dry-run when both slots and teams are present
-  let feasibilityWarning: string | null = null;
-  if (iceSlots.length > 0 && teams.length >= 2) {
-    const { feasibility } = assignDays(iceSlots, teams, settings, Math.random);
-    if (!feasibility.ok) {
-      feasibilityWarning = feasibility.reason;
-    }
-  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -168,15 +159,7 @@ export const IceTimesTab = ({ iceSlots, settings, teams = [], onSlotsChange, onN
         </Alert>
       )}
 
-      {/* Feasibility warning (DAV-52) */}
-      {feasibilityWarning && (
-        <Alert>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            <strong>Slot balance warning:</strong> {feasibilityWarning} You can still generate, but the schedule may need more retries.
-          </AlertDescription>
-        </Alert>
-      )}
+      <FeasibilityWarning iceSlots={iceSlots} teams={teams} settings={settings} />
 
       {/* Import Summary */}
       {iceSlots.length > 0 && (

@@ -1,9 +1,10 @@
-import { RefreshCw, Check, AlertTriangle, Clock, Calendar as CalendarIcon, Users } from 'lucide-react';
+import { RefreshCw, Check, AlertTriangle, Calendar as CalendarIcon, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FairnessReport, SchedulerSettings } from '@/types/scheduler';
-import { formatTime } from '@/lib/csvParser';
+import { formatDate } from '@/lib/csvParser';
+import { FairnessSectionB } from '@/components/FairnessSectionB';
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
@@ -16,7 +17,7 @@ interface FairnessReportProps {
 }
 
 export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdated, onDismissUpdated }: FairnessReportProps) => {
-  const [openSections, setOpenSections] = useState<Set<string>>(new Set(['games', 'late', 'weekend']));
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set(['games', 'timeslots', 'late']));
 
   const toggleSection = (section: string) => {
     const newSet = new Set(openSections);
@@ -119,61 +120,11 @@ export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdat
         </Card>
       </Collapsible>
 
-      {/* Section B: Time Slot Distribution */}
-      <Collapsible open={openSections.has('timeslots')} onOpenChange={() => toggleSection('timeslots')}>
-        <Card>
-          <CollapsibleTrigger className="w-full">
-            <CardHeader className="pb-3 cursor-pointer hover:bg-muted/30 transition-colors">
-              <CardTitle className="text-sm flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-accent" />
-                  Time Slot Distribution
-                </span>
-                <ChevronDown className={`w-4 h-4 transition-transform ${openSections.has('timeslots') ? 'rotate-180' : ''}`} />
-              </CardTitle>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="data-table text-sm">
-                  <thead>
-                    <tr>
-                      <th>Team</th>
-                      <th>Div</th>
-                      {report.allTimeSlots.map(slot => (
-                        <th key={slot} className="text-center">
-                          <span className={report.lateTimeSlots.includes(slot) ? 'text-warning' : ''}>
-                            {formatTime(slot)}
-                            {report.lateTimeSlots.includes(slot) && ' ⚠'}
-                          </span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.teamStats.map(stat => (
-                      <tr key={stat.teamName}>
-                        <td>{stat.teamName}</td>
-                        <td>
-                          <span className={stat.division === 'A' ? 'badge-division-a' : 'badge-division-b'}>
-                            {stat.division}
-                          </span>
-                        </td>
-                        {report.allTimeSlots.map(slot => (
-                          <td key={slot} className="text-center font-mono tabular-nums">
-                            {stat.timeSlots[slot] || 0}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
+      <FairnessSectionB
+        report={report}
+        open={openSections.has('timeslots')}
+        onToggle={() => toggleSection('timeslots')}
+      />
 
       {/* Section C: Late Slot Fairness Summary */}
       <Collapsible open={openSections.has('late')} onOpenChange={() => toggleSection('late')}>
@@ -229,58 +180,61 @@ export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdat
         </Card>
       </Collapsible>
 
-      {/* Section D: Friday & Saturday Games */}
-      <Collapsible open={openSections.has('weekend')} onOpenChange={() => toggleSection('weekend')}>
-        <Card>
-          <CollapsibleTrigger className="w-full">
-            <CardHeader className="pb-3 cursor-pointer hover:bg-muted/30 transition-colors">
-              <CardTitle className="text-sm flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <CalendarIcon className="w-4 h-4 text-purple-500" />
-                  Friday & Saturday Games
-                </span>
-                <ChevronDown className={`w-4 h-4 transition-transform ${openSections.has('weekend') ? 'rotate-180' : ''}`} />
-              </CardTitle>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent>
-              <table className="data-table text-sm">
-                <thead>
-                  <tr>
-                    <th>Team</th>
-                    <th>Division</th>
-                    <th className="text-right">Friday</th>
-                    <th className="text-right">Saturday</th>
-                    <th className="text-right">Total</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.teamStats.map(stat => (
-                    <tr key={stat.teamName}>
-                      <td>{stat.teamName}</td>
-                      <td>
-                        <span className={stat.division === 'A' ? 'badge-division-a' : 'badge-division-b'}>
-                          {stat.division}
-                        </span>
-                      </td>
-                      <td className="text-right font-mono tabular-nums">{stat.fridayGames}</td>
-                      <td className="text-right font-mono tabular-nums">{stat.saturdayGames}</td>
-                      <td className="text-right font-mono tabular-nums">{stat.totalWeekend}</td>
-                      <td>
-                        <span className={stat.weekendFlagged ? 'badge-flagged' : 'badge-ok'}>
-                          {stat.weekendFlagged ? '⚠ FLAG' : '✓ OK'}
-                        </span>
-                      </td>
+      {/* Section D: Friday & Saturday Games — hidden when the season has no Fri/Sat ice,
+          where it would render an all-zero table of "✓ OK" that means nothing. */}
+      {report.hasWeekendIce && (
+        <Collapsible open={openSections.has('weekend')} onOpenChange={() => toggleSection('weekend')}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="pb-3 cursor-pointer hover:bg-muted/30 transition-colors">
+                <CardTitle className="text-sm flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <CalendarIcon className="w-4 h-4 text-purple-500" />
+                    Friday & Saturday Games
+                  </span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${openSections.has('weekend') ? 'rotate-180' : ''}`} />
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <table className="data-table text-sm">
+                  <thead>
+                    <tr>
+                      <th>Team</th>
+                      <th>Division</th>
+                      <th className="text-right">Friday</th>
+                      <th className="text-right">Saturday</th>
+                      <th className="text-right">Total</th>
+                      <th>Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
+                  </thead>
+                  <tbody>
+                    {report.teamStats.map(stat => (
+                      <tr key={stat.teamName}>
+                        <td>{stat.teamName}</td>
+                        <td>
+                          <span className={stat.division === 'A' ? 'badge-division-a' : 'badge-division-b'}>
+                            {stat.division}
+                          </span>
+                        </td>
+                        <td className="text-right font-mono tabular-nums">{stat.fridayGames}</td>
+                        <td className="text-right font-mono tabular-nums">{stat.saturdayGames}</td>
+                        <td className="text-right font-mono tabular-nums">{stat.totalWeekend}</td>
+                        <td>
+                          <span className={stat.weekendFlagged ? 'badge-flagged' : 'badge-ok'}>
+                            {stat.weekendFlagged ? '⚠ FLAG' : '✓ OK'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+      )}
 
       {/* Section E: Day-of-Week Distribution */}
       <Collapsible open={openSections.has('dayofweek')} onOpenChange={() => toggleSection('dayofweek')}>
@@ -307,6 +261,7 @@ export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdat
                       <th className="text-center text-purple-500">Fri</th>
                       <th className="text-center text-purple-500">Sat</th>
                       <th className="text-center">Sun</th>
+                      <th className="text-center">2+ same day</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -320,6 +275,19 @@ export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdat
                         <td className="text-center font-mono tabular-nums text-purple-500">{stat.dayOfWeekGames['Friday'] || 0}</td>
                         <td className="text-center font-mono tabular-nums text-purple-500">{stat.dayOfWeekGames['Saturday'] || 0}</td>
                         <td className="text-center font-mono tabular-nums">{stat.dayOfWeekGames['Sunday'] || 0}</td>
+                        <td className="text-center font-mono tabular-nums">
+                          {stat.sameDayDates.length > 0 ? (
+                            <span
+                              className="badge-late"
+                              title={`Plays twice on: ${stat.sameDayDates.map(formatDate).join(', ')}`}
+                            >
+                              <AlertTriangle className="w-3 h-3" />
+                              {stat.sameDayDates.length}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -450,16 +418,20 @@ export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdat
                     <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'A')?.gamesPerTeam ?? '0'}</td>
                     <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'B')?.gamesPerTeam ?? '0'}</td>
                   </tr>
-                  <tr>
-                    <td>Friday Game Days</td>
-                    <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'A')?.fridayGameDays || 0}</td>
-                    <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'B')?.fridayGameDays || 0}</td>
-                  </tr>
-                  <tr>
-                    <td>Saturday Game Days</td>
-                    <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'A')?.saturdayGameDays || 0}</td>
-                    <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'B')?.saturdayGameDays || 0}</td>
-                  </tr>
+                  {report.hasWeekendIce && (
+                    <>
+                      <tr>
+                        <td>Friday Game Days</td>
+                        <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'A')?.fridayGameDays || 0}</td>
+                        <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'B')?.fridayGameDays || 0}</td>
+                      </tr>
+                      <tr>
+                        <td>Saturday Game Days</td>
+                        <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'A')?.saturdayGameDays || 0}</td>
+                        <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'B')?.saturdayGameDays || 0}</td>
+                      </tr>
+                    </>
+                  )}
                   <tr>
                     <td>Total Late Slots</td>
                     <td className="text-center font-mono tabular-nums">{report.divisionBalance.find(d => d.division === 'A')?.totalLateSlots || 0}</td>
@@ -467,6 +439,11 @@ export const FairnessReportSection = ({ report, settings, onRecalculate, isUpdat
                   </tr>
                 </tbody>
               </table>
+              <p className="text-xs text-muted-foreground mt-3">
+                These numbers compare the two divisions for reference only. Teams never play
+                across divisions, so a difference here is not an unfairness — fairness is
+                measured between teams within the same division.
+              </p>
             </CardContent>
           </CollapsibleContent>
         </Card>

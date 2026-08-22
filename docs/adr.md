@@ -100,10 +100,29 @@ interface Settings {
   lateSlotVarianceFlag: number; // Flag if Late Surplus > this (default: 2). Field name kept for storage compatibility.
   weekendVarianceFlag: number;  // Flag if weekend-game count exceeds the division minimum by more than this (default: 3)
   maxGamesPerWeek: number;      // Hard cap (default: 3)
+  // --- added in v0.6 ---
+  primeWindowStart: string;     // '17:45'. Bands: afternoon < primeWindowStart
+                                // <= prime < lateGameThreshold <= late. Only the lower
+                                // bound is stored; the upper bound is lateGameThreshold.
+                                // NOTE: this does NOT make invalid states unrepresentable —
+                                // primeWindowStart >= lateGameThreshold silently collapses
+                                // the prime band, so a Zod schema enforces the ordering at
+                                // the form boundary and on load.
 }
+
+Same-day games are an **invariant, not a setting**: a team never plays twice on one
+calendar date. Band balancing is likewise always on. Both were considered as settings
+and cut — neither has an answer a commissioner could sensibly give.
 ```
 
 ## **4.4 Fairness Report Types**
+
+> **Drift notice.** The shapes below are the original design and no longer match
+> the code. The implemented `TeamStats` / `FairnessReport` live in
+> `src/types/scheduler.ts` and differ substantially — notably they are keyed by
+> **team name** rather than `teamId`, and expose `lateSurplus` / `lateSlotFlagged`
+> per team instead of a separate `lateGameVarianceByTeam` map. Treat
+> `src/types/scheduler.ts` as authoritative for these types.
 
 ```ts
 interface TeamStats {
@@ -134,7 +153,49 @@ interface FairnessReport {
 
 This is the heart of the application. The algorithm runs in four phases, each building on the previous. The entire process targets completion in under 15 seconds on a modern browser.
 
-## **5.1 Phase 1: Day-to-Division Assignment**
+## **5.1 Phase 1: Slot-Block Assignment**
+
+> **v0.6 — shipped** (DAV-201/202/203). This phase previously assigned whole *dates* to divisions. It now
+> assigns **contiguous slot blocks**, because whole-date assignment structurally forces
+> same-day double-headers. A date carrying 6 slots handed to an 8-team division yields
+> 12 team-appearances over 8 teams — by pigeonhole at least 4 teams must play twice,
+> before the optimizer makes a single choice. On a real 236-slot season this produced
+> 92 forced extra games including 10 triple-headers.
+>
+> ### Blocking rule
+>
+> ```
+> maxBlock(division) = floor(teamCount(division) / 2)     // 4 for an 8-team division
+>
+> for each date, slots sorted by startTime:
+>   slotCount <= maxBlock  ->  assign the whole date (proportional greedy, below)
+>   slotCount >  maxBlock  ->  split into contiguous blocks, largest legal block first
+>                              (6 slots / 8 teams -> 4 + 2), alternating which division
+>                              receives the leading block
+> ```
+>
+> Blocks are **contiguous** by construction. This is not incidental: the one-division-per-date
+> rule exists so teams in a division overlap at the rink and socialise afterwards, and a
+> contiguous run preserves that. A 4-block is the ideal case — 8 appearances over 8 teams
+> means every team plays exactly once and the whole division is present.
+>
+> Split-required dates are allocated **first, chronologically** (they are budget-inelastic);
+> whole dates are then greedied against the remaining budget. **At most one block per
+> division per date**, which makes contiguity unconditional. Where `slotCount` exceeds the
+> combined `maxBlock` of both divisions, placing every slot without a same-day game is
+> arithmetically impossible. This does not arise in practice: ice is booked against the
+> league's own capacity, so `slotsOnDate <= maxBlock(A) + maxBlock(B)` holds for any
+> properly-configured season. **Every ice slot must be used** is therefore an
+> unconditional invariant (`games.length === iceSlots.length`). Overflow is reachable only
+> via a misconfigured roster (e.g. 8-vs-1 teams, where the single-team division receives
+> no slots and the other caps at 4 games per date); that is caught by the pre-generation
+> feasibility warning, with a tripwire assertion as backstop.
+>
+> **Cross-division scope.** Only slot *count* is balanced across divisions. Late and prime
+> supply are deliberately not equalised between divisions — there is no cross-division play,
+> so the comparison has no audience (PRD §3.2.1 rule 3).
+
+### Pre-v0.6 date-level algorithm (still used for whole dates)
 
 Assign each calendar date (with all its ice slots) to exactly one division. **Primary goal: balance games-per-team across all divisions to ±1 (PRD §3.2.2 priority 1).** Secondary goals (tiebreakers, in order):
 
@@ -147,8 +208,8 @@ Assign each calendar date (with all its ice slots) to exactly one division. **Pr
 
 1. **Compute targets.** `total_team_games = 2 × total_slots`; `target_per_team = total_team_games / total_teams` (a real number). For each division `d`, `target_slots[d] = round(team_count[d] × total_slots / total_teams)`. If `sum(target_slots) ≠ total_slots` after rounding, nudge the largest target up or down by 1 so the budgets sum exactly.
 2. **Group and sort.** Group slots by date. Sort dates by `(slot_count_on_date desc, date asc)` — large-impact dates first so they can't push a division past its budget later.
-3. **Greedy assign.** For each date in sorted order, assign it to the division with the largest remaining budget (`target_slots[d] − assigned_slots_so_far[d]`). On ties, prefer the division that more needs the resources on that date (Friday/Saturday/late counts). On further ties, alternate A/B.
-4. **Feasibility check.** After assignment, verify `floor(target_per_team) ≤ games_per_team[d] ≤ ceil(target_per_team)` for every division. If not, return `{ ok: false, reason }` to the caller (which surfaces a warning in the Ice Times tab); otherwise return `{ ok: true }` alongside the date→division map. The post-run invariant in `scheduler/index.ts` is the final backstop if SA produces a violating schedule despite a feasible allocation.
+3. **Greedy assign.** For each date in sorted order, assign it to the division with the largest remaining budget (`target_slots[d] − assigned_slots_so_far[d]`). *(v0.6: the Friday/Saturday/late tiebreakers described here were removed. Block assignment is fully deterministic and ignores `settings`; cross-division balance of late or weekend ice is no longer a goal — see PRD §3.2.1 rule 3, since there is no cross-division play. Where the budget-leading division cannot host a date whole, the date is **split** rather than reassigned.)*
+4. **Feasibility check.** After assignment, verify `floor(target_per_team) ≤ games_per_team[d] ≤ ceil(target_per_team)` for every division. If not, return `{ ok: false, reason }` to the caller (which surfaces a warning in the Ice Times tab); otherwise return `{ ok: true }` alongside the date→division map. *(**Shipped in v0.6.** The check is deliberately **warning-only**: `generateSchedule` no longer returns early on `!feasibility.ok`, because doing so handed the user an empty schedule for any mix that could not split evenly. The reason is returned as structured numbers — `gamesPerTeam` and `allowedRange` — so the UI phrases its own sentence, and is surfaced on both the Ice Times and Teams tabs.)* The post-run invariant in `scheduler/index.ts` is the final backstop if SA produces a violating schedule despite a feasible allocation.
 
 **Pseudo-code:**
 
@@ -303,6 +364,34 @@ The scoring function quantifies "unfairness" as a single number. Lower is better
 | Consecutive opponent penalty | 50 | Avoid playing same team in back-to-back weeks. |
 | Rest day violation (<2 days) | 25 | Soft constraint. Less than 2 days rest is bad. |
 | Max games/week violation | 10000 | Hard constraint. Massive penalty ensures this is never violated. |
+| **Same-day game (per extra game)** | **5000** | v0.6 *(shipped)*. Above every soft term, below the hard weekly cap. Always on — same-day play is an invariant. Structural blocking (§5.1) does the real work; this penalises the remainder. |
+| Prime-band total variance (per team) | 150 | v0.6 *(shipped; tuned by measurement)*. Balances each team's total prime-time games, weighted below the late terms so late fairness always wins. |
+| Afternoon-band total variance (per team) | 150 | v0.6 *(shipped; tuned)*. As above. |
+
+> **How 150 was chosen.** Swept against the real season (`weightTuning.manual.test.ts`),
+> holding the late gate at every value:
+>
+> | weight | Div A aft/prime | Div B aft/prime |
+> |---|---|---|
+> | 0 | 6 / 6 | 7 / 8 |
+> | 50 | 2 / 1 | 1 / 1 |
+> | **150** | **0 / 1** | **1 / 1** |
+> | 400–2500 | 2 / 1 | 1 / 1 |
+>
+> 150 is the optimum: Division A reaches perfect afternoon balance and higher weights do
+> not improve on it, they only inflate the score. `lateRigidity.test.ts` asserts these
+> constants so a later edit fails loudly rather than drifting.
+
+> **Band terms are per-band *totals*, not per-individual-slot.** Balancing all ten
+> individual columns was considered and rejected: it adds five competing terms and is the
+> most likely to fight the rigid late constraint. Per-band totals target the observed
+> failure directly — on a real season one team drew 11 prime games and 3 afternoons while
+> a divisionmate drew 5 and 9.
+
+> **Note on the weekend term.** The pseudo-code below computes weekend penalty as
+> `(max − min)² × 100` across all teams; `scoring.ts` computes per-division statistical
+> variance × 100. The implementation is authoritative. The distinction is academic for
+> seasons with no Friday/Saturday ice, which is common.
 
 **Scoring Function Pseudo-code:**
 
@@ -417,11 +506,21 @@ function optimizeSchedule(
 
 **Why these parameters?**
 
-* 50,000 iterations: Enough to explore the solution space for 150 games. Takes ~5-10 seconds.
+* 50,000 iterations: **measured**, not guessed. On the real 236-slot / 16-team season the
+  best score converges at 50,000 (~63 s) and larger budgets do not improve on it. An
+  earlier synthetic fixture converged at 30,000 and wrongly suggested cutting the budget —
+  it had only two distinct start times, where the real file has ten. Re-measure whenever
+  the scoring function changes; see `standards.md` §2.1 for the current curve.
 
 * Initial temperature 1000: Matches the scale of our scoring weights.
 
-* Cooling rate 0.9997: Slow enough to avoid getting stuck in local minima.
+* Cooling rate: **derived from the iteration budget** as `exp(ln(minT / T0) / iterations)`,
+  so the temperature reaches its floor at the last step whatever the budget. It was
+  previously a fixed 0.9997, which floored at iteration ~30,700 regardless — meaning 39%
+  of a 50,000-iteration run was greedy hill-climbing and raising the count bought almost
+  nothing. Making it budget-relative improved the score ~10% at the same 50,000 setting,
+  and established that the iteration count is *not* the binding constraint: the search has
+  converged, and larger budgets do not help.
 
 ## **5.4 Phase 4: Home/Away Assignment**
 
@@ -459,6 +558,9 @@ function assignHomeAway(games: Game[]): Game[] {
 ```
 
 # **6. Module Structure**
+
+> **Drift notice.** The tree below is the original plan. See the Deviations table
+> at the end of this document, and `CLAUDE.md` for the current layout.
 
 The codebase is organized into isolated modules. The scheduling algorithm is deliberately separated so we can swap implementations later.
 
@@ -542,7 +644,11 @@ All data is stored in localStorage. This is sufficient for a single-user applica
 | §6 Module | `src/parsers/` with stub csvParser | `src/parsers/` with PapaParse CSV + SheetJS Excel | Tickets DAV-48/50 upgraded to real parsers |
 | §6 Module | `src/state/` with AppContext + reducer | `src/hooks/useSchedulerStore.ts` | Flat hook is simpler; no routing needed |
 | §4.1 IceSlot | `isLate: boolean`, `isWeekend: boolean` stored | Derived at render via `isDerivedLate`/`isDerivedWeekend` | Avoids stale stored state when threshold changes |
-| §8 Coverage | Per-path threshold on `src/hooks/useSchedulerStore.ts` | Threshold deferred until React hook test infrastructure (jsdom + @testing-library/react) lands | DAV-64 acceptance criteria forbid coverage-padding tests; store coverage tickets to follow |
+| §4.1 IceSlot | `dayOfWeek: number` (0=Sun…6=Sat) | `dayOfWeek: string` (`'Monday'`…) | Parsers derive the name once at import; string compares directly against the `'Friday'`/`'Saturday'` weekend test |
+| §4.4 Report | `TeamStats` keyed by `teamId`; separate `lateGameVarianceByTeam`, `weekendVariance`, `flaggedTeams` | `TeamStats` keyed by **team name**, carrying `lateSurplus`, `lateSlotFlagged`, `weekendFlagged` inline | Report renders by name; per-team flags avoid a second lookup. Duplicate team names are blocked at entry (`TeamsTab`), which is what makes name-keying safe |
+| §6 Module | `src/utils/` + root `src/types.ts` | `src/lib/` + `src/types/scheduler.ts` | Matches the `@/` alias layout used everywhere else |
+| §6 Module | (not planned) | `src/scheduler/worker.ts` + `workerTypes.ts` | Annealing pass moved off the main thread to keep the UI responsive |
+| §8 Coverage | Per-path threshold on `src/hooks/useSchedulerStore.ts` | **Resolved in v0.6** — jsdom + `@testing-library/react` landed with the roster-lock work (DAV-197/198); threshold now set to `{ lines: 70, branches: 85 }` | Deferred under DAV-64 because its acceptance criteria forbade coverage-padding tests. `src/components/**` stays excluded from the report so generated shadcn primitives do not drown the signal |
 
 # **9. Future Considerations**
 
